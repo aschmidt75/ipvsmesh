@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+package localinterface;
+
+message Empty{}
+
+service DaemonService {
+  rpc Stop(Empty) returns (Empty);
+}

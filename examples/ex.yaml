@@ -1,0 +1,35 @@
+parameters:
+  host:
+    type: localNetwork
+  portmap:
+    type: file
+    file: /some/where.yaml
+
+config:
+  docker-local-1:
+    type: docker
+    url: file:///var/run/docker.sock
+    watchEvents: true
+  etcd-2:
+    type: etcd
+    url: https://10.0.0.1:8443/
+    tls:
+      cacert: ./bla.crt
+    
+services:
+  SampleService1:
+    address: ${host.eth0}:${portmap.PORT}
+    type: dockerFrontProxy
+    spec:
+      configurationProfile: docker-local-1
+      matchLabel:
+        app: nginx          # will select all containers with label app=nginx
+      containerPort: 8080   # will look up IP of exposed port where containerPort is 8080
+
+  SampleService2:
+    address: ${host.lo}:8080
+    type: etcdBacked
+    spec:
+      configurationProfile: etcd-2
+      keyPrefix: /some/path/to/a/lsit/of/ips
+      valueType: list
