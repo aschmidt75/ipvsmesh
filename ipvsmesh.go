@@ -10,7 +10,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// cli version
+// Version is the cli app version
 var Version string
 
 func main() {
@@ -30,8 +30,7 @@ func main() {
 	tlscert := app.StringOpt("tlscert", "", "TLS certificate file in PEM format. Valid only with --tls and --tlskey")
 	tlskey := app.StringOpt("tlskey", "", "TLS key file in PEM format. Valid only with --tls and --tlskcert")
 
-	app.Command("daemon", "start fast-mesh daemon. Returns PID of background process", cmd.CmdDaemon)
-	app.Command("stop", "stops fast-mesh daemon", cmd.CmdDaemonStop)
+	app.Command("daemon", "manages the background daemon.", cmd.Daemon)
 
 	app.Before = func() {
 		if trace != nil {

@@ -20,14 +20,19 @@ import (
 	lSyslog "github.com/sirupsen/logrus/hooks/syslog"
 )
 
-// Usages:
-// daemon
-func CmdDaemon(cmd *cli.Cmd) {
+// Daemon controls the daemon command
+func Daemon(cmd *cli.Cmd) {
+	cmd.Command("start", "starts the daemon", DaemonStart)
+	cmd.Command("stop", "stops the daemon", DaemonStop)
+}
+
+// DaemonStart starts the daemon either on foreground or background mode
+func DaemonStart(cmd *cli.Cmd) {
 	cmd.Spec = "[-f|--foreground] [--log-file=<logfile>] [--sudo] [--gid=<groupid>]"
 	var (
 		foreground = cmd.BoolOpt("f foreground", false, "Run in foreground, do not daemonize")
-		logfile    = cmd.StringOpt("log-file", "", "optional log file destination")
-		sudo       = cmd.BoolOpt("sudo", false, "sudo to root when daemonizing")
+		logfile    = cmd.StringOpt("log-file", "", "optional log file destination. Default destination is syslog")
+		sudo       = cmd.BoolOpt("sudo", false, "use sudo when daemonizing")
 		groupID    = cmd.IntOpt("gid", -1, "optional group ID for socket and log file creation")
 	)
 
@@ -40,7 +45,7 @@ func CmdDaemon(cmd *cli.Cmd) {
 		if config.Config().DaemonizeFlag {
 			*foreground = true
 
-			hook, err := lSyslog.NewSyslogHook("", "", syslog.LOG_INFO|syslog.LOG_NOTICE|syslog.LOG_DEBUG, "fast-mesh")
+			hook, err := lSyslog.NewSyslogHook("", "", syslog.LOG_INFO|syslog.LOG_NOTICE|syslog.LOG_DEBUG, "ipvsmesh")
 			if err != nil {
 				log.WithField("err", err).Fatal("unable to set up syslog")
 			} else {
@@ -61,7 +66,7 @@ func CmdDaemon(cmd *cli.Cmd) {
 			}
 		}
 
-		if *foreground == false {
+		if !*foreground {
 			env := os.Environ()
 			env = append(env, "IPVSMESH_DAEMONIZE=1")
 
@@ -143,11 +148,12 @@ func connect() *grpc.ClientConn {
 
 	var conn *grpc.ClientConn
 
+	//	dialOptions := grpc.WithContextDialer(func(ctx context.Context, addr string, timeout time.Duration) (net.Conn, error) {
 	dialOptions := grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
 		return net.DialTimeout("unix", addr, timeout)
 	})
 	if config.Config().TLS {
-		creds, err := credentials.NewClientTLSFromFile(config.Config().TLSCertFile, "fm-grpc-tls-comm")
+		creds, err := credentials.NewClientTLSFromFile(config.Config().TLSCertFile, "ipvsmesh-grpc-tls-comm")
 		if err != nil {
 			log.Fatal("unable to load TLS key or certificate from file. Check --tls* parameters.")
 		}
@@ -169,7 +175,8 @@ func connect() *grpc.ClientConn {
 	return conn
 }
 
-func CmdDaemonStop(cmd *cli.Cmd) {
+// DaemonStop stops the daemon by sending the stop command to background process
+func DaemonStop(cmd *cli.Cmd) {
 	cmd.Action = func() {
 		// connect to backend
 		conn := connect()

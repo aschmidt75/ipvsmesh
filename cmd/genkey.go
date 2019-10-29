@@ -85,7 +85,8 @@ func GenKeyFiles(prefix, cn string) error {
 	return nil
 }
 
-func cmdGenerateKey(cmd *cli.Cmd) {
+// CmdGenerateKey implements the generation for a tls key
+func CmdGenerateKey(cmd *cli.Cmd) {
 	cmd.Action = func() {
 		if err := GenKeyFiles("ipvsmesh", "ipvsmesh-grpc-tls-comm"); err != nil {
 			log.WithField("err", err).Error("unable to generate/write key/certificate file")

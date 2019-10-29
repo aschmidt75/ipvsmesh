@@ -13,4 +13,5 @@ require (
 	golang.org/x/text v0.3.2 // indirect
 	golang.org/x/tools v0.0.0-20191023163450-98e333b8b3a3 // indirect
 	google.golang.org/grpc v1.21.1
+	honnef.co/go/tools v0.0.1-2019.2.3 // indirect
 )
