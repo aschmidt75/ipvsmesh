@@ -17,7 +17,7 @@ config:
       cacert: ./bla.crt
     
 services:
-  SampleService1:
+  - name: SampleService1
     address: ${host.eth0}:${portmap.PORT}
     type: dockerFrontProxy
     spec:
@@ -26,7 +26,7 @@ services:
         app: nginx          # will select all containers with label app=nginx
       containerPort: 8080   # will look up IP of exposed port where containerPort is 8080
 
-  SampleService2:
+  - name: SampleService2
     address: ${host.lo}:8080
     type: etcdBacked
     spec:

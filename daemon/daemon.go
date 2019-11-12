@@ -49,6 +49,11 @@ func (s *Service) Stop(context.Context, *localinterface.Empty) (*localinterface.
 	var timeoutSecs int = 10
 	log.WithField("timeoutSecs", timeoutSecs).Info("Stopping workers...")
 
+	// take down in reverse order
+	for l, r := 0, len(s.registeredStoppables)-1; l < r; l, r = l+1, r-1 {
+		s.registeredStoppables[l], s.registeredStoppables[r] = s.registeredStoppables[r], s.registeredStoppables[l]
+	}
+
 	for _, r := range s.registeredStoppables {
 		if r != nil {
 			*r.StopChan <- &s.wg
@@ -64,10 +69,7 @@ func (s *Service) Stop(context.Context, *localinterface.Empty) (*localinterface.
 	}()
 	select {
 	case <-ctxTO.Done():
-		log.Warn("timed out while stopping workers")
 	}
-
-	log.Info("Stopping myself...")
 
 	s.wg.Add(1)
 	*s.StopChan <- &s.wg

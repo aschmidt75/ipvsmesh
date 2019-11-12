@@ -13,6 +13,8 @@ type Configuration struct {
 	DaemonSocketPath      string `env:"IPVSMESH_SOCKET" envDefault:"/tmp/ipvsmesh.sock"`
 	DaemonConnTimeoutSecs int    `env:"IPVSMESH_DAEMON_TIMEOUT_SEC" envDefault:"5"`
 
+	DefaultConfigFile string `env:"IPVSMESH_CONFIGFILE" envDefault:"/etc/ipvsmesh.yaml"`
+
 	TLS         bool   `env:"IPVSMESH_TLS" envDefault:"false"`
 	TLSCertFile string `env:"IPVSMESH_TLSCERTFILE" envDefault:""`
 	TLSKeyFile  string `env:"IPVSMESH_TLSKEYFILE" envDefault:""`

@@ -28,12 +28,13 @@ func Daemon(cmd *cli.Cmd) {
 
 // DaemonStart starts the daemon either on foreground or background mode
 func DaemonStart(cmd *cli.Cmd) {
-	cmd.Spec = "[-f|--foreground] [--log-file=<logfile>] [--sudo] [--gid=<groupid>]"
+	cmd.Spec = "[-f|--foreground] [--log-file=<logfile>] [--sudo] [--gid=<groupid>] [--config=<configfile>]"
 	var (
 		foreground = cmd.BoolOpt("f foreground", false, "Run in foreground, do not daemonize")
 		logfile    = cmd.StringOpt("log-file", "", "optional log file destination. Default destination is syslog")
 		sudo       = cmd.BoolOpt("sudo", false, "use sudo when daemonizing")
 		groupID    = cmd.IntOpt("gid", -1, "optional group ID for socket and log file creation")
+		configfile = cmd.StringOpt("config", config.Config().DefaultConfigFile, "optional filename of config file.")
 	)
 
 	cmd.Action = func() {
@@ -117,21 +118,19 @@ func DaemonStart(cmd *cli.Cmd) {
 
 			ds := daemon.NewService(*groupID)
 
-			// kick off some sample workers, register as service
-			demoService := daemon.NewDemoWorker("bla")
-			ds.Register(&demoService.StoppableByChan)
-			log.WithField("ds", ds).Trace("registered")
-			go demoService.DemoWorker()
+			configUpdateCh := make(daemon.ConfigUpdateChanType)
 
-			demoService = daemon.NewDemoWorker("bli")
-			ds.Register(&demoService.StoppableByChan)
-			log.WithField("ds", ds).Trace("registered")
-			go demoService.DemoWorker()
+			// Create an applier which reads from the channel and applies updates
+			configApplier := daemon.NewConfigApplierWorker(configUpdateCh)
+			ds.Register(&configApplier.StoppableByChan)
+			log.WithField("s", configApplier).Trace("registered")
+			go configApplier.Worker()
 
-			demoService = daemon.NewDemoWorker("blub")
-			ds.Register(&demoService.StoppableByChan)
-			log.WithField("ds", ds).Trace("registered")
-			go demoService.DemoWorker()
+			// create a watcher on the config file. It will send updates to configUpdateCh
+			configWatcher := daemon.NewConfigWatcherWorker(*configfile, configUpdateCh)
+			ds.Register(&configWatcher.StoppableByChan)
+			log.WithField("s", configWatcher).Trace("registered")
+			go configWatcher.Worker()
 
 			// main loop, wait for commands from cmdline client as per grpc calls
 			ds.Start(context.Background())
@@ -143,7 +142,7 @@ func DaemonStart(cmd *cli.Cmd) {
 func connect() *grpc.ClientConn {
 	_, err := os.Stat(config.Config().DaemonSocketPath)
 	if err != nil {
-		log.WithField("socket", config.Config().DaemonSocketPath).Fatal("Socket file not present. Maybe daemon is not running?")
+		log.WithFields(log.Fields{"socket": config.Config().DaemonSocketPath, "err": err}).Fatal("Socket file not present. Maybe daemon is not running?")
 	}
 
 	var conn *grpc.ClientConn
@@ -191,5 +190,6 @@ func DaemonStop(cmd *cli.Cmd) {
 			log.WithField("err", err).Error("error stopping daemon.")
 			return
 		}
+
 	}
 }
