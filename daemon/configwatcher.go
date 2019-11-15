@@ -75,10 +75,10 @@ func (s *ConfigWatcherWorker) Worker() {
 		case err := <-w.Error:
 			log.Errorln(err)
 		case <-w.Closed:
-			log.Info("Configuratiom Watcher stopping")
+			log.Info("Stopping Configuratiom Watcher")
 			return
 		case wg := <-*s.StoppableByChan.StopChan:
-			log.Info("Configuratiom Watcher stopping")
+			log.Info("Stopping Configuratiom Watcher")
 			wg.Done()
 			return
 		}
@@ -109,6 +109,7 @@ func (s *ConfigWatcherWorker) readConfig() {
 			"spec": spec,
 			"name": spec.Name(),
 		}).Debug("spec")
+		service.Plugin = spec
 	}
 
 	// send new config to update channel

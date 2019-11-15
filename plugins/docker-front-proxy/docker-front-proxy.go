@@ -1,7 +1,10 @@
 package dockerfrontproxy
 
 import (
+	"time"
+
 	"github.com/aschmidt75/ipvsmesh/model"
+	log "github.com/sirupsen/logrus"
 )
 
 // Spec is the spec subpart of a service for the docker front proxy plugin
@@ -30,4 +33,19 @@ func (s Spec) GetDownwardData() ([]model.DownwardBackendServer, error) {
 // HasUpwardInterface is false, does not expose something
 func (s Spec) HasUpwardInterface() bool {
 	return false
+}
+
+// RunNotificationLoop ...
+func (s Spec) RunNotificationLoop(notChan chan struct{}) error {
+	log.WithField("Name", s.Name()).Debug("Starting notification loop")
+	for {
+		select {
+		case <-notChan:
+			break
+		case <-time.After(1 * time.Second):
+			notChan <- struct{}{}
+		}
+	}
+	log.WithField("Name", s.Name()).Debug("Stopped notification loop")
+	return nil
 }

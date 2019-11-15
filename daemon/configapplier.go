@@ -50,7 +50,15 @@ func (s *ConfigApplierWorker) Worker() {
 			log.WithField("numServicesActive", GetAllServiceWorkers().Len()).Debug("stat")
 
 		case wg := <-*s.StoppableByChan.StopChan:
-			log.Info("Configuratiom Applier stopping")
+			log.Info("Stopping Configuratiom Applier")
+
+			// stop all active service workers
+			l := GetAllServiceWorkers()
+			for e := l.Front(); e != nil; e = e.Next() {
+				sw := e.Value.(*ServiceWorker)
+				*sw.StopChan <- &s.wg
+				l.Remove(e)
+			}
 
 			<-time.After(1 * time.Second)
 			wg.Done()

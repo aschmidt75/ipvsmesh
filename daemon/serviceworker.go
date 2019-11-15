@@ -51,12 +51,31 @@ func NewServiceWorker(sc chan *sync.WaitGroup, cfg *model.IPVSMeshConfig, servic
 
 func (s *ServiceWorker) Worker() {
 	log.WithField("Name", s.service.Name).Info("Starting service worker...")
+
+	updateCh := make(chan struct{})
+	p := s.service.Plugin
+	if p != nil {
+		if p.HasDownwardInterface() {
+			// set up notification
+			go p.RunNotificationLoop(updateCh)
+		}
+	}
+
 	for {
 		select {
+		case <-updateCh:
+			//		case <-time.After(1 * time.Second):
+			p := s.service.Plugin
+			data, err := p.GetDownwardData()
+			if err != nil {
+				log.WithField("err", err).Error("Unable to get downward data from plugin")
+			}
+			log.WithField("data", data).Info("Got data")
 
 		case wg := <-*s.StoppableByChan.StopChan:
 			log.WithField("Name", s.service.Name).Info("Stopping service worker")
 			wg.Done()
+			updateCh <- struct{}{}
 			return
 		}
 	}
