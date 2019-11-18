@@ -63,7 +63,7 @@ func (s *ConfigWatcherWorker) Worker() {
 	for {
 		select {
 		case event := <-w.Event:
-			log.WithField("e", event).Info("changed")
+			log.WithField("e", event).Debug("config file(s) changed")
 			info, err := os.Stat(s.configFileName)
 			if err == nil {
 				mt := info.ModTime()

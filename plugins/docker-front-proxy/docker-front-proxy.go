@@ -31,7 +31,7 @@ func (s *Spec) initialize() {
 		if err != nil {
 			log.WithField("err", err).Error("unable to create docker client")
 		}
-		log.WithField("docker", s.dockerClient).Debug("Docker Client")
+		log.WithField("docker", s.dockerClient).Trace("Docker Client")
 	}
 }
 

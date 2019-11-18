@@ -41,13 +41,13 @@ func (s *ConfigApplierWorker) Worker() {
 	for {
 		select {
 		case cfg := <-s.updateChan:
-			log.WithField("cfg", cfg).Info("Received new config")
+			log.WithField("cfg", cfg).Debug("Received new config")
 			err := s.applyServices(cfg)
 			if err != nil {
 				log.WithField("err", err).Error("Unable to apply configuration")
 			}
 
-			log.WithField("numServicesActive", GetAllServiceWorkers().Len()).Debug("stat")
+			log.WithField("numServicesActive", GetAllServiceWorkers().Len()).Info("Applied new configuration")
 
 		case wg := <-*s.StoppableByChan.StopChan:
 			log.Info("Stopping Configuratiom Applier")

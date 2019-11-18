@@ -60,9 +60,15 @@ func (s *ServiceWorker) queryAndProcessDownwardData() {
 	p := s.service.Plugin
 	data, err := p.GetDownwardData()
 	if err != nil {
-		log.WithField("err", err).Error("Unable to get downward data from plugin")
+		log.WithFields(log.Fields{
+			"err":     err,
+			"service": s.service.Name,
+		}).Error("Unable to get downward data from plugin")
 	}
-	log.WithField("data", data).Info("Got data")
+	log.WithFields(log.Fields{
+		"data":    data,
+		"service": s.service.Name,
+	}).Info("Received backend updates")
 }
 
 // Worker checks downward notifications
