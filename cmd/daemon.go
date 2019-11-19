@@ -119,9 +119,10 @@ func DaemonStart(cmd *cli.Cmd) {
 			ds := daemon.NewService(*groupID)
 
 			configUpdateCh := make(daemon.ConfigUpdateChanType)
+			ipvsUpdateCh := make(daemon.IPVSApplierChanType)
 
-			// Create an applier which reads from the channel and applies updates
-			configApplier := daemon.NewConfigApplierWorker(configUpdateCh)
+			// Create an applier which reads from the channel and applies updates.
+			configApplier := daemon.NewConfigApplierWorker(configUpdateCh, ipvsUpdateCh)
 			ds.Register(&configApplier.StoppableByChan)
 			log.WithField("s", configApplier).Trace("registered")
 			go configApplier.Worker()
@@ -131,6 +132,14 @@ func DaemonStart(cmd *cli.Cmd) {
 			ds.Register(&configWatcher.StoppableByChan)
 			log.WithField("s", configWatcher).Trace("registered")
 			go configWatcher.Worker()
+
+			// service workers will be created by configApplier dynamically
+
+			// create an IPVSApplier (holding the central ipvs model)
+			ipvsApplier := daemon.NewIPVSApplierWorker(ipvsUpdateCh)
+			ds.Register(&ipvsApplier.StoppableByChan)
+			log.WithField("s", ipvsApplier).Trace("registered")
+			go ipvsApplier.Worker()
 
 			// main loop, wait for commands from cmdline client as per grpc calls
 			ds.Start(context.Background())

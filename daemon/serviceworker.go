@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"container/list"
+	"sort"
 	"sync"
 
 	"github.com/aschmidt75/ipvsmesh/model"
@@ -12,6 +13,8 @@ import (
 // current configuration model.
 type ServiceWorker struct {
 	StoppableByChan
+
+	ipvsUpdateChan IPVSApplierChanType
 
 	cfg     *model.IPVSMeshConfig
 	service *model.Service
@@ -44,17 +47,24 @@ func GetServiceWorkerByName(name string) *ServiceWorker {
 }
 
 // NewServiceWorker creates a new ServiceWorker for a single service of a configuration model.
-func NewServiceWorker(sc chan *sync.WaitGroup, cfg *model.IPVSMeshConfig, service *model.Service) *ServiceWorker {
+func NewServiceWorker(sc chan *sync.WaitGroup, cfg *model.IPVSMeshConfig, service *model.Service, ipvsUpdateChan IPVSApplierChanType) *ServiceWorker {
 	sw := &ServiceWorker{
 		StoppableByChan: StoppableByChan{
 			StopChan: &sc,
 		},
-		cfg:     cfg,
-		service: service,
+		cfg:            cfg,
+		service:        service,
+		ipvsUpdateChan: ipvsUpdateChan,
 	}
 	GetAllServiceWorkers().PushBack(sw)
 	return sw
 }
+
+type byAddress []model.DownwardBackendServer
+
+func (a byAddress) Len() int           { return len(a) }
+func (a byAddress) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a byAddress) Less(i, j int) bool { return a[i].Address < a[j].Address }
 
 func (s *ServiceWorker) queryAndProcessDownwardData() {
 	p := s.service.Plugin
@@ -69,6 +79,17 @@ func (s *ServiceWorker) queryAndProcessDownwardData() {
 		"data":    data,
 		"service": s.service.Name,
 	}).Info("Received backend updates")
+
+	// sort by address
+	sort.Sort(byAddress(data))
+
+	// forward them
+	s.ipvsUpdateChan <- IPVSApplierUpdateStruct{
+		serviceName: s.service.Name,
+		service:     s.service,
+		data:        data,
+		cfg:         s.cfg,
+	}
 }
 
 // Worker checks downward notifications
@@ -105,5 +126,6 @@ func (s *ServiceWorker) Update(newService *model.Service) {
 	log.WithField("Name", s.service.Name).Info("Updating service...")
 	// TODO: apply new parts here..
 	s.service = newService
+	s.queryAndProcessDownwardData()
 	log.WithField("data", s.service).Info("Updated service.")
 }

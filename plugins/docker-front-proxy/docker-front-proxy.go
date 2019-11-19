@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/aschmidt75/ipvsmesh/model"
 	log "github.com/sirupsen/logrus"
@@ -21,7 +22,7 @@ type Spec struct {
 	dockerClient *client.Client
 }
 
-func (s *Spec) initialize() {
+func (s *Spec) initialize() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -30,9 +31,11 @@ func (s *Spec) initialize() {
 		s.dockerClient, err = client.NewEnvClient()
 		if err != nil {
 			log.WithField("err", err).Error("unable to create docker client")
+			return err
 		}
 		log.WithField("docker", s.dockerClient).Trace("Docker Client")
 	}
+	return nil
 }
 
 // Name returns the plugin name
@@ -45,10 +48,14 @@ func (s *Spec) HasDownwardInterface() bool {
 	return true
 }
 
-// GetDownwardData queries
+// GetDownwardData queries docker containers by spec and returns
+// a list of ip address/port number endpoints
 func (s *Spec) GetDownwardData() ([]model.DownwardBackendServer, error) {
 
-	s.initialize()
+	err := s.initialize()
+	if err != nil {
+		return make([]model.DownwardBackendServer, 0), err
+	}
 
 	ctx := context.Background()
 
@@ -64,12 +71,29 @@ func (s *Spec) GetDownwardData() ([]model.DownwardBackendServer, error) {
 		log.WithField("err", err).Error("unable to query containers")
 	}
 
-	res := make([]model.DownwardBackendServer, len(containers))
-	for idx, container := range containers {
+	numRunning := 0
+	for _, container := range containers {
+		log.WithFields(log.Fields{
+			"id":     container.ID,
+			"state":  container.State,
+			"status": container.Status,
+		}).Trace("query")
+		if container.State == "running" {
+			numRunning++
+		}
+	}
+
+	res := make([]model.DownwardBackendServer, numRunning)
+	idx := 0
+	for _, container := range containers {
+		if container.State != "running" {
+			continue
+		}
 		endpointIP := ""
 		endpointPort := uint16(0)
 		for _, port := range container.Ports {
 			log.WithFields(log.Fields{
+				"id":   container.ID,
 				"port": port,
 			}).Trace("found port")
 			endpointPort = port.PrivatePort
@@ -78,6 +102,7 @@ func (s *Spec) GetDownwardData() ([]model.DownwardBackendServer, error) {
 		if container.NetworkSettings != nil {
 			for name, endpoint := range container.NetworkSettings.Networks {
 				log.WithFields(log.Fields{
+					"id":  container.ID,
 					"net": name,
 					"ip":  endpoint.IPAddress,
 				}).Trace("found endpoint")
@@ -85,7 +110,17 @@ func (s *Spec) GetDownwardData() ([]model.DownwardBackendServer, error) {
 			}
 		}
 
-		res[idx] = model.DownwardBackendServer{Address: fmt.Sprintf("%s:%d", endpointIP, endpointPort)}
+		addData := make(map[string]string)
+		addData["container.id"] = container.ID
+		if len(container.Names) > 0 {
+			addData["container.name"] = container.Names[0]
+		}
+
+		res[idx] = model.DownwardBackendServer{
+			Address:        fmt.Sprintf("%s:%d", endpointIP, endpointPort),
+			AdditionalInfo: addData,
+		}
+		idx++
 	}
 
 	return res, nil
@@ -101,7 +136,11 @@ func (s *Spec) HasUpwardInterface() bool {
 func (s *Spec) RunNotificationLoop(notChan chan struct{}) error {
 	log.WithField("Name", s.Name()).Debug("Starting notification loop")
 
-	s.initialize()
+	err := s.initialize()
+	if err != nil {
+		// do not start loop.
+		return err
+	}
 
 	ctx, _ := context.WithCancel(context.Background())
 
@@ -111,7 +150,7 @@ func (s *Spec) RunNotificationLoop(notChan chan struct{}) error {
 	for k, v := range s.MatchLabels {
 		args.Add("label", fmt.Sprintf("%s=%s", k, v))
 	}
-	log.WithField("filters", args).Trace("looking for this docker events")
+	log.WithField("filters", args).Trace("watching docker events")
 
 	msgs, errs := s.dockerClient.Events(ctx, types.EventsOptions{
 		Filters: args,
@@ -121,15 +160,19 @@ func (s *Spec) RunNotificationLoop(notChan chan struct{}) error {
 		select {
 		case err := <-errs:
 			log.WithField("err", err).Debug("docker client error")
+			// what now, reconnect?
+			return nil
 		case msg := <-msgs:
 			if msg.Action == "start" || msg.Action == "restart" || msg.Action == "stop" || msg.Action == "die" || msg.Action == "pause" || msg.Action == "unpause" {
 				log.WithField("msg", msg).Trace("docker client message")
-				notChan <- struct{}{}
+				go func() {
+					<-time.After(50 * time.Millisecond)
+					notChan <- struct{}{}
+				}()
 			}
 		case <-notChan:
-			break
+			log.WithField("Name", s.Name()).Debug("Stopped notification loop")
+			return nil
 		}
 	}
-	log.WithField("Name", s.Name()).Debug("Stopped notification loop")
-	return nil
 }

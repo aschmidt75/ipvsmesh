@@ -108,7 +108,7 @@ func (s *ConfigWatcherWorker) readConfig() {
 		log.WithFields(log.Fields{
 			"spec": spec,
 			"name": spec.Name(),
-		}).Debug("spec")
+		}).Trace("spec")
 		service.Plugin = spec
 	}
 

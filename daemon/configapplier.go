@@ -16,14 +16,15 @@ type ConfigUpdateChanType chan model.IPVSMeshConfig
 type ConfigApplierWorker struct {
 	StoppableByChan
 
-	updateChan ConfigUpdateChanType
-	wg         sync.WaitGroup
-	scWorkers  chan *sync.WaitGroup
+	updateChan     ConfigUpdateChanType
+	ipvsUpdateChan IPVSApplierChanType
+	wg             sync.WaitGroup
+	scWorkers      chan *sync.WaitGroup
 }
 
 // NewConfigApplierWorker creates a Configuration applier worker based on
 // an update channel.
-func NewConfigApplierWorker(updateChan ConfigUpdateChanType) *ConfigApplierWorker {
+func NewConfigApplierWorker(updateChan ConfigUpdateChanType, ipvsUpdateChan IPVSApplierChanType) *ConfigApplierWorker {
 	sc := make(chan *sync.WaitGroup, 1)
 	scWorkers := make(chan *sync.WaitGroup, 1)
 
@@ -31,8 +32,9 @@ func NewConfigApplierWorker(updateChan ConfigUpdateChanType) *ConfigApplierWorke
 		StoppableByChan: StoppableByChan{
 			StopChan: &sc,
 		},
-		updateChan: updateChan,
-		scWorkers:  scWorkers,
+		updateChan:     updateChan,
+		scWorkers:      scWorkers,
+		ipvsUpdateChan: ipvsUpdateChan,
 	}
 }
 
@@ -50,7 +52,7 @@ func (s *ConfigApplierWorker) Worker() {
 			log.WithField("numServicesActive", GetAllServiceWorkers().Len()).Info("Applied new configuration")
 
 		case wg := <-*s.StoppableByChan.StopChan:
-			log.Info("Stopping Configuratiom Applier")
+			log.Info("Stopping Configuration Applier")
 
 			// stop all active service workers
 			l := GetAllServiceWorkers()
@@ -69,6 +71,11 @@ func (s *ConfigApplierWorker) Worker() {
 
 func (s *ConfigApplierWorker) applyServices(cfg model.IPVSMeshConfig) error {
 	log.Debug("Applying services...")
+
+	// force ipvsapplier to clear caches
+	s.ipvsUpdateChan <- IPVSApplierUpdateStruct{
+		serviceName: "",
+	}
 
 	m := make(map[string]*model.Service)
 	for _, service := range cfg.Services {
@@ -103,7 +110,7 @@ func (s *ConfigApplierWorker) applyService(cfg model.IPVSMeshConfig, service *mo
 	sw := GetServiceWorkerByName(service.Name)
 	if sw == nil {
 		// create
-		sw = NewServiceWorker(s.scWorkers, &cfg, service)
+		sw = NewServiceWorker(s.scWorkers, &cfg, service, s.ipvsUpdateChan)
 		s.wg.Add(1)
 		go sw.Worker()
 	} else {
