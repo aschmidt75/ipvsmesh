@@ -16,10 +16,18 @@ import (
 
 // Spec is the spec subpart of a service for the docker front proxy plugin
 type Spec struct {
-	MatchLabels map[string]string `yaml:"matchLabels"`
+	MatchLabels    map[string]string     `yaml:"matchLabels"`
+	DynamicWeights []*DynamicWeightsSpec `yaml:"dynamicWeights,omitempty"`
 
 	mu           sync.Mutex
 	dockerClient *client.Client
+}
+
+// DynamicWeightsSpec associates a number of matchLabels with a concrete weight
+// All containers matching the labels are given that weight.
+type DynamicWeightsSpec struct {
+	Weight      int               `yaml:"weight"`
+	MatchLabels map[string]string `yaml:"matchLabels"`
 }
 
 func (s *Spec) initialize() error {
@@ -89,6 +97,7 @@ func (s *Spec) GetDownwardData() ([]model.DownwardBackendServer, error) {
 		if container.State != "running" {
 			continue
 		}
+
 		endpointIP := ""
 		endpointPort := uint16(0)
 		for _, port := range container.Ports {
@@ -120,6 +129,30 @@ func (s *Spec) GetDownwardData() ([]model.DownwardBackendServer, error) {
 			Address:        fmt.Sprintf("%s:%d", endpointIP, endpointPort),
 			AdditionalInfo: addData,
 		}
+
+		// check for dynamic weights
+		w := -1
+		if len(s.DynamicWeights) > 0 {
+			w = 0
+			for _, dw := range s.DynamicWeights {
+				if dw != nil {
+					// does container match all the labels?
+					matches := true
+					for k, v := range dw.MatchLabels {
+						vv, ex := container.Labels[k]
+						if !ex || v != vv {
+							matches = false
+						}
+					}
+
+					if matches {
+						w = dw.Weight
+					}
+				}
+			}
+		}
+		res[idx].Weight = w
+
 		idx++
 	}
 

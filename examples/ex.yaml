@@ -18,15 +18,15 @@ config:
     
 services:
   - name: SampleService1
+    address: ${host.eth0}:${portmap.PORT}
     type: dockerFrontProxy
     spec:
-      address: ${host.eth0}:${portmap.PORT}
       dynamicWeights:
       - weight: 100
-        matchLabel:
+        matchLabels:
           version: v5  
       - weight: 0
-        matchLabel:
+        matchLabels:
           version: v6
       configurationProfile: docker-local-1
       matchLabel:

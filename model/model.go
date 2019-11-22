@@ -66,7 +66,7 @@ type PluginSpec interface {
 // endpoint, with an address string suitable for ipvsctl's model.
 // It may contain additional data (e.g. ids) in a map.
 type DownwardBackendServer struct {
-	Address string
-
+	Address        string
+	Weight         int
 	AdditionalInfo map[string]string
 }
