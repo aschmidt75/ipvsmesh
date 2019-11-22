@@ -18,9 +18,16 @@ config:
     
 services:
   - name: SampleService1
-    address: ${host.eth0}:${portmap.PORT}
     type: dockerFrontProxy
     spec:
+      address: ${host.eth0}:${portmap.PORT}
+      dynamicWeights:
+      - weight: 100
+        matchLabel:
+          version: v5  
+      - weight: 0
+        matchLabel:
+          version: v6
       configurationProfile: docker-local-1
       matchLabel:
         app: nginx          # will select all containers with label app=nginx
