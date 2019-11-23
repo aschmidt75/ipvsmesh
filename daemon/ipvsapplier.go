@@ -210,6 +210,8 @@ func (s *IPVSApplierWorker) Worker() {
 				log.WithField("err", err).Error("Unable to apply update")
 			}
 
+			// TODO: Notify publishers about the change, so they can propagate it further
+
 		case wg := <-*s.StoppableByChan.StopChan:
 			log.Info("Stopping IPVS Applier")
 
