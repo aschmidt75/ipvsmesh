@@ -8,7 +8,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// ConfigUpdateChanType is a channel that transmits the model
+// ConfigUpdateChanType is a channel that transmits updated configuration
 type ConfigUpdateChanType chan model.IPVSMeshConfig
 
 // ConfigApplierWorker is a worker listening on the update channel
@@ -16,15 +16,16 @@ type ConfigUpdateChanType chan model.IPVSMeshConfig
 type ConfigApplierWorker struct {
 	StoppableByChan
 
-	updateChan     ConfigUpdateChanType
-	ipvsUpdateChan IPVSApplierChanType
-	wg             sync.WaitGroup
-	scWorkers      chan *sync.WaitGroup
+	updateChan                ConfigUpdateChanType
+	ipvsUpdateChan            IPVSApplierChanType
+	publisherConfigUpdateChan PublisherConfigUpdateChanType
+	wg                        sync.WaitGroup
+	scWorkers                 chan *sync.WaitGroup
 }
 
 // NewConfigApplierWorker creates a Configuration applier worker based on
 // an update channel.
-func NewConfigApplierWorker(updateChan ConfigUpdateChanType, ipvsUpdateChan IPVSApplierChanType) *ConfigApplierWorker {
+func NewConfigApplierWorker(updateChan ConfigUpdateChanType, ipvsUpdateChan IPVSApplierChanType, publisherConfigUpdateChan PublisherConfigUpdateChanType) *ConfigApplierWorker {
 	sc := make(chan *sync.WaitGroup, 1)
 	scWorkers := make(chan *sync.WaitGroup, 1)
 
@@ -32,9 +33,10 @@ func NewConfigApplierWorker(updateChan ConfigUpdateChanType, ipvsUpdateChan IPVS
 		StoppableByChan: StoppableByChan{
 			StopChan: &sc,
 		},
-		updateChan:     updateChan,
-		scWorkers:      scWorkers,
-		ipvsUpdateChan: ipvsUpdateChan,
+		updateChan:                updateChan,
+		scWorkers:                 scWorkers,
+		ipvsUpdateChan:            ipvsUpdateChan,
+		publisherConfigUpdateChan: publisherConfigUpdateChan,
 	}
 }
 
@@ -44,16 +46,16 @@ func (s *ConfigApplierWorker) Worker() {
 		select {
 		case cfg := <-s.updateChan:
 			log.WithField("cfg", cfg).Debug("Received new config")
+
+			// apply config to publisher worker
+			s.publisherConfigUpdateChan <- cfg
+
 			err := s.applyServices(cfg)
 			if err != nil {
 				log.WithField("err", err).Error("Unable to apply configuration (services)")
 			}
 
-			err = s.applyPublishers(cfg)
-			if err != nil {
-				log.WithField("err", err).Error("Unable to apply configuration (publishers)")
-			}
-
+			// done.
 			log.WithField("numServicesActive", GetAllServiceWorkers().Len()).Info("Applied new configuration")
 
 		case wg := <-*s.StoppableByChan.StopChan:
@@ -122,53 +124,6 @@ func (s *ConfigApplierWorker) applyService(cfg model.IPVSMeshConfig, service *mo
 		sw.Update(service)
 	}
 	log.WithField("sw", sw).Debug("Activated/Updated service worker")
-
-	return nil
-}
-
-func (s *ConfigApplierWorker) applyPublishers(cfg model.IPVSMeshConfig) error {
-	log.Debug("Applying publishers...")
-
-	m := make(map[string]*model.Publisher)
-	for _, publisher := range cfg.Publishers {
-		m[publisher.Name] = publisher
-	}
-
-	// walk active publisher worker, check if they're still part of the model.
-	l := GetAllPublisherhWorkers()
-	for e := l.Front(); e != nil; e = e.Next() {
-		pw := e.Value.(*PublisherhWorker)
-		_, ex := m[pw.publisher.Name]
-		if !ex {
-			log.WithField("name", pw.publisher.Name).Info("Taking down because not part of model any more")
-			*pw.StopChan <- &s.wg
-			l.Remove(e)
-		}
-	}
-
-	// walk new config, add/update workers
-	for _, publisher := range cfg.Publishers {
-		if err := s.applyPublisher(cfg, publisher); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (s *ConfigApplierWorker) applyPublisher(cfg model.IPVSMeshConfig, publisher *model.Publisher) error {
-	log.WithField("name", publisher.Name).Debug("Applying publisher...")
-
-	pw := GetPublisherWorkerByName(publisher.Name)
-	if pw == nil {
-		// create
-		pw = NewPublisherWorker(s.scWorkers, &cfg, publisher)
-		s.wg.Add(1)
-		go pw.Worker()
-	} else {
-		pw.Update(publisher)
-	}
-	log.WithField("pw", pw).Debug("Activated/Updated publisher worker")
 
 	return nil
 }

@@ -23,11 +23,11 @@ globals:
 publishers:
   - name: etcd-upstream
     type: etcdPublisher
+    matchLabels:
+      service: "1"
     spec:
       configProfile: etcd-2
       path: /my/nginx-es/
-      matchLabel:
-        service: "1"
       
 services:
   - name: SampleService1

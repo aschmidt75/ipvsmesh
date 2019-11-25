@@ -35,24 +35,27 @@ type IPVSApplierChanType chan IPVSApplierUpdateStruct
 type IPVSApplierWorker struct {
 	StoppableByChan
 
-	updateChan IPVSApplierChanType
-	cfg        *model.IPVSMeshConfig
-	services   map[string]IPVSApplierUpdateStruct
-	mu         sync.Mutex
+	updateChan          IPVSApplierChanType
+	publisherUpdateChan PublisherUpdateChanType
+
+	cfg      *model.IPVSMeshConfig
+	services map[string]IPVSApplierUpdateStruct
+	mu       sync.Mutex
 }
 
 // NewIPVSApplierWorker creates an IPVS applier worker based on
 // an update channel and the recent model
-func NewIPVSApplierWorker(updateChan IPVSApplierChanType) *IPVSApplierWorker {
+func NewIPVSApplierWorker(updateChan IPVSApplierChanType, publisherUpdateChan PublisherUpdateChanType) *IPVSApplierWorker {
 	sc := make(chan *sync.WaitGroup, 1)
 
 	return &IPVSApplierWorker{
 		StoppableByChan: StoppableByChan{
 			StopChan: &sc,
 		},
-		updateChan: updateChan,
-		cfg:        nil,
-		services:   make(map[string]IPVSApplierUpdateStruct, 5),
+		updateChan:          updateChan,
+		publisherUpdateChan: publisherUpdateChan,
+		cfg:                 nil,
+		services:            make(map[string]IPVSApplierUpdateStruct, 5),
 	}
 }
 
@@ -210,7 +213,10 @@ func (s *IPVSApplierWorker) Worker() {
 				log.WithField("err", err).Error("Unable to apply update")
 			}
 
-			// TODO: Notify publishers about the change, so they can propagate it further
+			// Notify publishers about the change, so they can propagate it further
+			s.publisherUpdateChan <- PublisherUpdate{
+				data: target,
+			}
 
 		case wg := <-*s.StoppableByChan.StopChan:
 			log.Info("Stopping IPVS Applier")

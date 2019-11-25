@@ -42,6 +42,8 @@ type Publisher struct {
 	// Additional labels to target this publisher
 	Labels map[string]string `yaml:"labels,omitempty"`
 
+	MatchLabels map[string]string `yaml:"matchLabels"`
+
 	// Spec is the specification for a publisher. See
 	// plugins/* for concrete Spec structs
 	Spec map[interface{}]interface{} `yaml:"spec"`
