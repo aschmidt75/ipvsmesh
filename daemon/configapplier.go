@@ -39,20 +39,20 @@ func NewConfigApplierWorker(updateChan ConfigUpdateChanType, ipvsUpdateChan IPVS
 }
 
 func (s *ConfigApplierWorker) Worker() {
-	log.Info("Starting Configuration applier...")
+	log.Info("configapplier: Starting Configuration applier...")
 	for {
 		select {
 		case cfg := <-s.updateChan:
-			log.WithField("cfg", cfg).Debug("Received new config")
+			log.WithField("cfg", cfg).Debug("configapplier: Received new config")
 			err := s.applyServices(cfg)
 			if err != nil {
-				log.WithField("err", err).Error("Unable to apply configuration")
+				log.WithField("err", err).Error("configapplier: Unable to apply configuration")
 			}
 
-			log.WithField("numServicesActive", GetAllServiceWorkers().Len()).Info("Applied new configuration")
+			log.WithField("numServicesActive", GetAllServiceWorkers().Len()).Info("configapplier: Applied new configuration")
 
 		case wg := <-*s.StoppableByChan.StopChan:
-			log.Info("Stopping Configuration Applier")
+			log.Info("configapplier: Stopping")
 
 			// stop all active service workers
 			l := GetAllServiceWorkers()
@@ -70,7 +70,7 @@ func (s *ConfigApplierWorker) Worker() {
 }
 
 func (s *ConfigApplierWorker) applyServices(cfg model.IPVSMeshConfig) error {
-	log.Debug("Applying services...")
+	log.Debug("configapplier: Applying services...")
 
 	// force ipvsapplier to clear caches
 	s.ipvsUpdateChan <- IPVSApplierUpdateStruct{
@@ -88,7 +88,7 @@ func (s *ConfigApplierWorker) applyServices(cfg model.IPVSMeshConfig) error {
 		sw := e.Value.(*ServiceWorker)
 		_, ex := m[sw.service.Name]
 		if !ex {
-			log.WithField("name", sw.service.Name).Info("Taking down because not part of model any more")
+			log.WithField("name", sw.service.Name).Debug("configapplier: Taking down because not part of model any more")
 			*sw.StopChan <- &s.wg
 			l.Remove(e)
 		}
@@ -105,7 +105,7 @@ func (s *ConfigApplierWorker) applyServices(cfg model.IPVSMeshConfig) error {
 }
 
 func (s *ConfigApplierWorker) applyService(cfg model.IPVSMeshConfig, service *model.Service) error {
-	log.WithField("name", service.Name).Debug("Applying service...")
+	log.WithField("name", service.Name).Debug("configapplier: Applying service...")
 
 	sw := GetServiceWorkerByName(service.Name)
 	if sw == nil {
@@ -116,7 +116,7 @@ func (s *ConfigApplierWorker) applyService(cfg model.IPVSMeshConfig, service *mo
 	} else {
 		sw.Update(service)
 	}
-	log.WithField("sw", sw).Debug("Activated/Updated service worker")
+	log.WithField("sw", sw).Debug("configapplier: Activated/Updated service worker")
 
 	return nil
 }

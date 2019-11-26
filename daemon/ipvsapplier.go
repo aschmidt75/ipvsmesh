@@ -136,8 +136,8 @@ func (s *IPVSApplierWorker) applyUpdate(target map[string]interface{}) error {
 	if err != nil {
 		return err
 	}
-	log.WithField("yaml", string(b)).Trace("Applying ipvsctl model")
-	log.Debug("Applying ipvsctl model")
+	log.WithField("yaml", string(b)).Trace("ipvsapplier: Applying ipvsctl model")
+	log.Debug("ipvsapplier: Applying ipvsctl model")
 
 	execType := s.cfg.Globals.Ipvsctl.ExecType
 	if execType == "" {
@@ -156,7 +156,7 @@ func (s *IPVSApplierWorker) applyUpdate(target map[string]interface{}) error {
 		"type": execType,
 		"file": fileName,
 		"cmd":  ipvsctlPath,
-	}).Debug("Applying with these settings...")
+	}).Debug("ipvsapplier: Applying with these settings...")
 	switch execType {
 	case "file-only":
 		return ioutil.WriteFile(fileName, b, 0640)
@@ -181,37 +181,37 @@ func (s *IPVSApplierWorker) applyUpdate(target map[string]interface{}) error {
 
 		return ipvsctl.Run()
 	default:
-		return fmt.Errorf("unknown executionType given: %s", execType)
+		return fmt.Errorf("ipvsapplier: unknown executionType given: %s", execType)
 	}
 }
 
 // Worker ...
 func (s *IPVSApplierWorker) Worker() {
-	log.Info("Starting IPVS applier...")
+	log.Info("ipvsapplier: Starting IPVS applier...")
 	for {
 		select {
 		case cfg := <-s.updateChan:
 			// if serviceName is empty, flush all services from local cache map but do not apply this (empty) config
 			if cfg.serviceName == "" {
 				s.services = make(map[string]IPVSApplierUpdateStruct, 5)
-				log.Debug("Flushing service cache after config refresh")
+				log.Debug("ipvsapplier: Flushing service cache after config refresh")
 				break
 			}
 
-			log.WithField("cfg", cfg).Debug("Received new ipvs update")
+			log.WithField("cfg", cfg).Debug("ipvsapplier: Received new ipvs update")
 
 			target, err := s.integrateUpdate(cfg)
 			if err != nil {
-				log.WithField("err", err).Error("Unable to integrate update")
+				log.WithField("err", err).Error("ipvsapplier: Unable to integrate update")
 			}
 
 			err = s.applyUpdate(target)
 			if err != nil {
-				log.WithField("err", err).Error("Unable to apply update")
+				log.WithField("err", err).Error("ipvsapplier: Unable to apply update")
 			}
 
 		case wg := <-*s.StoppableByChan.StopChan:
-			log.Info("Stopping IPVS Applier")
+			log.Info("ipvsapplier: Stopping IPVS Applier")
 
 			<-time.After(1 * time.Second)
 			wg.Done()

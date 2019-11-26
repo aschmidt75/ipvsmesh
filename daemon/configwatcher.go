@@ -33,14 +33,14 @@ func NewConfigWatcherWorker(configFileName string, updateChan ConfigUpdateChanTy
 }
 
 func (s *ConfigWatcherWorker) Worker() {
-	log.Info("Starting Configuration watcher...")
+	log.Info("configwatcher: Starting Configuration watcher...")
 
 	w := watcher.New()
 	w.SetMaxEvents(1)
 	w.FilterOps(watcher.Write, watcher.Create, watcher.Remove)
 
 	if err := w.Add(s.configFileName); err != nil {
-		log.WithField("err", err).Error("Unable to set up watcher")
+		log.WithField("err", err).Error("configwatcher: Unable to set up watcher")
 	}
 
 	go func() {
@@ -48,13 +48,13 @@ func (s *ConfigWatcherWorker) Worker() {
 		// Trigger artificial event to have config read the first time
 		// we get here.
 		w.Wait()
-		log.Debug("Initial config file read trigger")
+		log.Debug("configwatcher: Initial config file read trigger")
 		w.TriggerEvent(watcher.Create, nil)
 	}()
 
 	go func() {
 		if err := w.Start(time.Millisecond * 100); err != nil {
-			log.WithField("err", err).Error("Unable to start watcher")
+			log.WithField("err", err).Error("configwatcher: Unable to start watcher")
 		}
 
 	}()
@@ -63,7 +63,7 @@ func (s *ConfigWatcherWorker) Worker() {
 	for {
 		select {
 		case event := <-w.Event:
-			log.WithField("e", event).Debug("config file(s) changed")
+			log.WithField("e", event).Debug("configwatcher: config file(s) changed")
 			info, err := os.Stat(s.configFileName)
 			if err == nil {
 				mt := info.ModTime()
@@ -75,10 +75,10 @@ func (s *ConfigWatcherWorker) Worker() {
 		case err := <-w.Error:
 			log.Errorln(err)
 		case <-w.Closed:
-			log.Info("Stopping Configuratiom Watcher")
+			log.Info("configwatcher: Stopping Configuratiom Watcher")
 			return
 		case wg := <-*s.StoppableByChan.StopChan:
-			log.Info("Stopping Configuratiom Watcher")
+			log.Info("configwatcher: Stopping Configuratiom Watcher")
 			wg.Done()
 			return
 		}
@@ -87,7 +87,7 @@ func (s *ConfigWatcherWorker) Worker() {
 }
 
 func (s *ConfigWatcherWorker) readConfig() {
-	log.Debug("Reading input file")
+	log.Debug("configwatcher: Reading input file")
 
 	// read my config file
 	cfg, err := config.ReadModelFromInput(s.configFileName)
@@ -95,20 +95,20 @@ func (s *ConfigWatcherWorker) readConfig() {
 		log.Error(err)
 		return
 	}
-	log.WithField("cfg", *cfg).Debug("Read config")
+	log.WithField("cfg", *cfg).Debug("configwatcher: Read config")
 
 	// walk over services, parse spec fields according to plugins
 
 	for _, service := range cfg.Services {
 		spec, err := plugins.ReadPluginSpecByTypeString(service)
 		if err != nil {
-			log.WithField("err", err).Errorf("Unable to parse spec for service %s", service.Name)
+			log.WithField("err", err).Errorf("configwatcher: Unable to parse spec for service %s", service.Name)
 			continue
 		}
 		log.WithFields(log.Fields{
 			"spec": spec,
 			"name": spec.Name(),
-		}).Trace("spec")
+		}).Trace("configwatcher: spec")
 		service.Plugin = spec
 	}
 

@@ -73,12 +73,12 @@ func (s *ServiceWorker) queryAndProcessDownwardData() {
 		log.WithFields(log.Fields{
 			"err":     err,
 			"service": s.service.Name,
-		}).Error("Unable to get downward data from plugin")
+		}).Error("serviceworker: Unable to get downward data from plugin")
 	}
 	log.WithFields(log.Fields{
 		"data":    data,
 		"service": s.service.Name,
-	}).Info("Received backend updates")
+	}).Info("serviceworker: Received backend updates")
 
 	// sort by address
 	sort.Sort(byAddress(data))
@@ -94,7 +94,7 @@ func (s *ServiceWorker) queryAndProcessDownwardData() {
 
 // Worker checks downward notifications
 func (s *ServiceWorker) Worker() {
-	log.WithField("Name", s.service.Name).Info("Starting service worker...")
+	log.WithField("Name", s.service.Name).Info("serviceworker: Starting service worker...")
 
 	s.queryAndProcessDownwardData()
 
@@ -113,7 +113,7 @@ func (s *ServiceWorker) Worker() {
 			s.queryAndProcessDownwardData()
 
 		case wg := <-*s.StoppableByChan.StopChan:
-			log.WithField("Name", s.service.Name).Info("Stopping service worker")
+			log.WithField("Name", s.service.Name).Info("serviceworker: Stopping service worker")
 			wg.Done()
 			updateCh <- struct{}{}
 			return
@@ -123,9 +123,9 @@ func (s *ServiceWorker) Worker() {
 
 // Update applies configuration updates to a ServiceWorker
 func (s *ServiceWorker) Update(newService *model.Service) {
-	log.WithField("Name", s.service.Name).Info("Updating service...")
+	log.WithField("Name", s.service.Name).Info("serviceworker: Updating service...")
 	// TODO: apply new parts here..
 	s.service = newService
 	s.queryAndProcessDownwardData()
-	log.WithField("data", s.service).Info("Updated service.")
+	log.WithField("data", s.service).Info("serviceworker: Updated service.")
 }

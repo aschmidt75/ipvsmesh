@@ -16,7 +16,7 @@ func ReadPluginSpecByTypeString(service *model.Service) (model.PluginSpec, error
 	}
 
 	var res model.PluginSpec
-	if service.Type == "docker-front-proxy" {
+	if service.Type == "dockerFrontProxy" {
 		res = &dockerfrontproxy.Spec{}
 	}
 
