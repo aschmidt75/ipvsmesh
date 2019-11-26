@@ -1,6 +1,8 @@
 package plugins
 
 import (
+	"errors"
+
 	"github.com/aschmidt75/ipvsmesh/model"
 	dockerfrontproxy "github.com/aschmidt75/ipvsmesh/plugins/docker-front-proxy"
 	"gopkg.in/yaml.v2"
@@ -18,6 +20,10 @@ func ReadPluginSpecByTypeString(service *model.Service) (model.PluginSpec, error
 	var res model.PluginSpec
 	if service.Type == "dockerFrontProxy" {
 		res = &dockerfrontproxy.Spec{}
+	}
+
+	if res == nil {
+		return nil, errors.New("unknown service type, skipping spec")
 	}
 
 	err = yaml.Unmarshal(b, res)

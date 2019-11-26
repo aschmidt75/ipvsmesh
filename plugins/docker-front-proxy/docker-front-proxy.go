@@ -153,8 +153,8 @@ func (s *Spec) RunNotificationLoop(notChan chan struct{}) error {
 	for {
 		select {
 		case err := <-errs:
-			log.WithField("err", err).Debug("docker-front-proxy: docker client error")
-			// what now, reconnect?
+			log.WithField("err", err).Error("docker-front-proxy: docker client error")
+			// TODO: try reconnect?
 			return nil
 		case msg := <-msgs:
 			if msg.Action == "start" || msg.Action == "restart" || msg.Action == "stop" || msg.Action == "die" || msg.Action == "pause" || msg.Action == "unpause" {
