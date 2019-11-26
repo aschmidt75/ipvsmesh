@@ -103,6 +103,10 @@ type PluginSpec interface {
 	// data of the local ipvs table to other locations. We have something
 	// that it can use (e.g. publish on a k/v store)
 	HasUpwardInterface() bool
+
+	// PushUpwardData is used to notify others upward about
+	// changes in this model
+	PushUpwardData(data UpwardData) error
 }
 
 // DownwardBackendServer contains all data regarding a concrete
@@ -112,4 +116,13 @@ type DownwardBackendServer struct {
 	Address string
 
 	AdditionalInfo map[string]string
+}
+
+// UpwardData contains an endpoint in form of an ipvs address
+type UpwardData struct {
+	Address     string
+	ServiceName string
+
+	OriginService   *Service
+	TargetPublisher *Publisher
 }

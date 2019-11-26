@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/aschmidt75/ipvsmesh/model"
+	"github.com/aschmidt75/ipvsmesh/plugins"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -56,6 +57,21 @@ func (s *PublisherhWorker) getLabelsByServiceName(name string) (map[string]strin
 	return make(map[string]string, 0), false
 }
 
+func (s *PublisherhWorker) getFirstServiceByLabels(matchLabels map[string]string) (*model.Service, bool) {
+	for _, service := range s.cfg.Services {
+		found := true
+		for k, v := range matchLabels {
+			vv, ex := service.Labels[k]
+			if !ex || v != vv {
+				found = false
+			}
+		}
+		if found {
+			return service, true
+		}
+	}
+	return nil, false
+}
 func (s *PublisherhWorker) findPublishersByLabels(matchLabels map[string]string) []*model.Publisher {
 	res := make([]*model.Publisher, 0, 5)
 	log.WithField("matchLabels", matchLabels).Trace("Looking for publishers with these labels")
@@ -78,7 +94,7 @@ func (s *PublisherhWorker) findPublishersByLabels(matchLabels map[string]string)
 			log.WithFields(log.Fields{
 				"name": publisherName,
 				"l":    matchLabels,
-			}).Debug("Found publisher by labels")
+			}).Trace("Found publisher by labels")
 			res = append(res, publisher)
 		}
 	}
@@ -87,16 +103,18 @@ func (s *PublisherhWorker) findPublishersByLabels(matchLabels map[string]string)
 }
 
 // walks over a PublisherUpdate, looks up affected
-// services/publishers and triggers them
-func (s *PublisherhWorker) walkUpdate(upd PublisherUpdate) error {
+// services/publishers and returns a list of them
+func (s *PublisherhWorker) walkUpdate(upd PublisherUpdate) ([]*model.Publisher, error) {
 	servicesRaw, ex := upd.data["services"]
 	if !ex {
 		// no services there. Notify all publishers to take down existings endpoints
 		log.Debug("PublisherWorker: No services")
-		return nil
+		return make([]*model.Publisher, 0), nil
 	}
 
 	services := servicesRaw.([]interface{})
+
+	m := make(map[string]*model.Publisher)
 
 	for _, serviceRaw := range services {
 		service := serviceRaw.(map[string]interface{})
@@ -119,9 +137,51 @@ func (s *PublisherhWorker) walkUpdate(upd PublisherUpdate) error {
 		log.WithFields(log.Fields{
 			"num":         len(publishers),
 			"serviceName": serviceName,
-		}).Debug("Found publishers for matchLabels")
+		}).Trace("Found publishers for matchLabels")
+		for _, p := range publishers {
+			m[p.Name] = p
+		}
 	}
 
+	res := make([]*model.Publisher, len(m))
+	idx := 0
+	for _, v := range m {
+		res[idx] = v
+		idx++
+	}
+
+	return res, nil
+}
+
+func (s *PublisherhWorker) triggerPublishing(publishers []*model.Publisher) error {
+	for _, publisher := range publishers {
+		log.WithField("name", publisher.Name).Debug("Triggering publish update")
+
+		if publisher.Plugin == nil {
+			log.WithField("name", publisher.Name).Warn("Invalid plugin spec, skipping")
+			continue
+		}
+
+		originService, ex := s.getFirstServiceByLabels(publisher.MatchLabels)
+		if !ex {
+			log.WithField("name", publisher.Name).Warn("No services match MatchLabels, skipping")
+			continue
+		}
+
+		// Forward to plugin
+		ud := model.UpwardData{
+			Address:         originService.Address,
+			ServiceName:     originService.Name,
+			OriginService:   originService,
+			TargetPublisher: publisher,
+		}
+		if err := publisher.Plugin.PushUpwardData(ud); err != nil {
+			log.WithFields(log.Fields{
+				"err":         err,
+				"serviceName": ud.ServiceName,
+			}).Error("Unable to trigger publishing")
+		}
+	}
 	return nil
 }
 
@@ -132,11 +192,18 @@ func (s *PublisherhWorker) Worker() {
 	for {
 		select {
 		case upd := <-s.updateCh:
-			log.WithField("upd", upd).Debug("PublisherWorker: got backend update")
+			log.WithField("upd", upd).Debug("PublisherWorker: got backend update for publishing")
 
-			err := s.walkUpdate(upd)
+			publishers, err := s.walkUpdate(upd)
 			if err != nil {
-				log.WithField("err", err).Error("Unable to publish configuration update")
+				log.WithField("err", err).Error("Unable to process publisher update")
+				continue
+			}
+
+			err = s.triggerPublishing(publishers)
+			if err != nil {
+				log.WithField("err", err).Error("Unable to publish update")
+				continue
 			}
 
 		case cfg := <-s.configUpdateCh:
@@ -145,6 +212,15 @@ func (s *PublisherhWorker) Worker() {
 			s.cfg = cfg
 
 			for _, publisher := range cfg.Publishers {
+				// load plugin spec
+				if publisher.Plugin == nil {
+					var err error
+					publisher.Plugin, err = plugins.ReadPublisherPluginSpecByTypeString(publisher)
+					if err != nil {
+						log.WithField("err", err).Error("unable to parse spec for publisher")
+					}
+				}
+
 				_, ex := s.publisherSpecs[publisher.Name]
 
 				if !ex {

@@ -1,0 +1,24 @@
+
+globals:
+  ipvsctl:
+    executionType: file-only
+    file: ./ipvsctl.yaml
+    
+publishers:
+  - name: etcd-upstream
+    type: etcdPublisher
+    matchLabels:
+      svc: "sample-1"     # publish only service which match these labels
+    spec:
+      configProfile: etcd-2
+      path: /my/nginx-es/
+      
+services:
+  - name: SampleService1
+    type: dockerFrontProxy
+    labels:
+      svc: "sample-1"   # mark this service with this label
+    spec:
+      address: 10.1.2.3:80
+      matchLabel:
+        app: nginx          

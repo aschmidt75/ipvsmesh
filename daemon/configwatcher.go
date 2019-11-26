@@ -99,10 +99,12 @@ func (s *ConfigWatcherWorker) readConfig() {
 
 	// walk over services, parse spec fields according to plugins
 
+	ok := true
 	for _, service := range cfg.Services {
 		spec, err := plugins.ReadPluginSpecByTypeString(service)
 		if err != nil {
 			log.WithField("err", err).Errorf("Unable to parse spec for service %s", service.Name)
+			ok = false
 			continue
 		}
 		log.WithFields(log.Fields{
@@ -110,6 +112,11 @@ func (s *ConfigWatcherWorker) readConfig() {
 			"name": spec.Name(),
 		}).Trace("spec")
 		service.Plugin = spec
+	}
+
+	if !ok {
+		log.Warn("There are configuration errors, will not apply this.")
+		return
 	}
 
 	// send new config to update channel

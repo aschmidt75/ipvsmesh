@@ -68,6 +68,7 @@ func (a byAddress) Less(i, j int) bool { return a[i].Address < a[j].Address }
 
 func (s *ServiceWorker) queryAndProcessDownwardData() {
 	p := s.service.Plugin
+
 	data, err := p.GetDownwardData()
 	if err != nil {
 		log.WithFields(log.Fields{
