@@ -30,10 +30,10 @@ func (s *Spec) initialize() error {
 		var err error
 		s.dockerClient, err = client.NewEnvClient()
 		if err != nil {
-			log.WithField("err", err).Error("unable to create docker client")
+			log.WithField("err", err).Error("docker-front-proxy: unable to create docker client")
 			return err
 		}
-		log.WithField("docker", s.dockerClient).Trace("Docker Client")
+		log.WithField("docker", s.dockerClient).Trace("docker-front-proxy: Docker Client")
 	}
 	return nil
 }
@@ -68,16 +68,11 @@ func (s *Spec) GetDownwardData() ([]model.DownwardBackendServer, error) {
 	}
 	containers, err := s.dockerClient.ContainerList(ctx, opts)
 	if err != nil {
-		log.WithField("err", err).Error("unable to query containers")
+		log.WithField("err", err).Error("docker-front-proxy: unable to query containers")
 	}
 
 	numRunning := 0
 	for _, container := range containers {
-		log.WithFields(log.Fields{
-			"id":     container.ID,
-			"state":  container.State,
-			"status": container.Status,
-		}).Trace("query")
 		if container.State == "running" {
 			numRunning++
 		}
@@ -92,23 +87,22 @@ func (s *Spec) GetDownwardData() ([]model.DownwardBackendServer, error) {
 		endpointIP := ""
 		endpointPort := uint16(0)
 		for _, port := range container.Ports {
-			log.WithFields(log.Fields{
-				"id":   container.ID,
-				"port": port,
-			}).Trace("found port")
 			endpointPort = port.PrivatePort
 
 		}
 		if container.NetworkSettings != nil {
-			for name, endpoint := range container.NetworkSettings.Networks {
-				log.WithFields(log.Fields{
-					"id":  container.ID,
-					"net": name,
-					"ip":  endpoint.IPAddress,
-				}).Trace("found endpoint")
+			for _, endpoint := range container.NetworkSettings.Networks {
 				endpointIP = endpoint.IPAddress
 			}
 		}
+
+		log.WithFields(log.Fields{
+			"id":     container.ID,
+			"state":  container.State,
+			"status": container.Status,
+			"ip":     endpointIP,
+			"port":   endpointPort,
+		}).Trace("docker-front-proxy: found matching container")
 
 		addData := make(map[string]string)
 		addData["container.id"] = container.ID
@@ -134,7 +128,7 @@ func (s *Spec) HasUpwardInterface() bool {
 // RunNotificationLoop connects to docker daemon and waits for
 // container events. Each matching event will trigger an update on notCh
 func (s *Spec) RunNotificationLoop(notChan chan struct{}) error {
-	log.WithField("Name", s.Name()).Debug("Starting notification loop")
+	log.WithField("Name", s.Name()).Debug("docker-front-proxy: Starting notification loop")
 
 	err := s.initialize()
 	if err != nil {
@@ -150,7 +144,7 @@ func (s *Spec) RunNotificationLoop(notChan chan struct{}) error {
 	for k, v := range s.MatchLabels {
 		args.Add("label", fmt.Sprintf("%s=%s", k, v))
 	}
-	log.WithField("filters", args).Trace("watching docker events")
+	log.WithField("filters", args).Trace("docker-front-proxy: watching docker events")
 
 	msgs, errs := s.dockerClient.Events(ctx, types.EventsOptions{
 		Filters: args,
@@ -159,19 +153,19 @@ func (s *Spec) RunNotificationLoop(notChan chan struct{}) error {
 	for {
 		select {
 		case err := <-errs:
-			log.WithField("err", err).Debug("docker client error")
-			// what now, reconnect?
+			log.WithField("err", err).Error("docker-front-proxy: docker client error")
+			// TODO: try reconnect?
 			return nil
 		case msg := <-msgs:
 			if msg.Action == "start" || msg.Action == "restart" || msg.Action == "stop" || msg.Action == "die" || msg.Action == "pause" || msg.Action == "unpause" {
-				log.WithField("msg", msg).Trace("docker client message")
+				log.WithField("msg", msg).Trace("docker-front-proxy: docker client message")
 				go func() {
 					<-time.After(50 * time.Millisecond)
 					notChan <- struct{}{}
 				}()
 			}
 		case <-notChan:
-			log.WithField("Name", s.Name()).Debug("Stopped notification loop")
+			log.WithField("Name", s.Name()).Debug("docker-front-proxy: Stopped notification loop")
 			return nil
 		}
 	}

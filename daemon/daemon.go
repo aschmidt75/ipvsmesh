@@ -47,7 +47,7 @@ func NewService(groupID int) *Service {
 // Stop stops all running services
 func (s *Service) Stop(context.Context, *localinterface.Empty) (*localinterface.Empty, error) {
 	var timeoutSecs int = 10
-	log.WithField("timeoutSecs", timeoutSecs).Info("Stopping workers...")
+	log.WithField("timeoutSecs", timeoutSecs).Info("daemon: Stopping workers...")
 
 	// take down in reverse order
 	for l, r := 0, len(s.registeredStoppables)-1; l < r; l, r = l+1, r-1 {
@@ -96,24 +96,24 @@ func (s *Service) Start(ctx context.Context) {
 
 	// start grpc stuff, kick to bgnd
 	go func() {
-		log.Trace("creating listener/socket file")
+		log.Trace("daemon: creating listener/socket file")
 
-		log.WithFields(log.Fields{"pid": os.Getpid(), "uid": syscall.Getuid(), "gid": syscall.Getgid()}).Trace()
+		log.WithFields(log.Fields{"pid": os.Getpid(), "uid": syscall.Getuid(), "gid": syscall.Getgid()}).Trace("daemon")
 		syscall.Umask(int(0007)) // new files be rwxrwx---
 
 		//
 		listener, err := net.Listen("unix", config.Config().DaemonSocketPath)
 		if err != nil {
-			log.WithField("err", err).Error("Unable to listen on unix socket.")
+			log.WithField("err", err).Error("daemon: Unable to listen on unix socket.")
 			os.Exit(3)
 		}
 
 		// change ownership to group (if group given, != -1)
 		if err := os.Chown(config.Config().DaemonSocketPath, -1, s.GroupID); err != nil {
-			log.WithField("err", err).Warn("unable to chgrp for socket file.")
+			log.WithField("err", err).Warn("daemon: unable to chgrp for socket file.")
 		}
 
-		log.WithField("listener", listener).Trace("created listener, registering grpc service")
+		log.WithField("listener", listener).Trace("daemon: created listener, registering grpc service")
 
 		if config.Config().TLS {
 			if config.Config().TLSKeyFile == "" {
@@ -136,7 +136,7 @@ func (s *Service) Start(ctx context.Context) {
 
 		localinterface.RegisterDaemonServiceServer(s.grpcServer, s)
 
-		log.WithField("grpcServer", s.grpcServer).Trace("start serving grpc")
+		log.WithField("grpcServer", s.grpcServer).Trace("daemon: start serving grpc")
 
 		err = s.grpcServer.Serve(listener)
 		if err != nil {
@@ -158,7 +158,7 @@ func (s *Service) Start(ctx context.Context) {
 	// remove socket file if its still there.
 	_, err := os.Stat(config.Config().DaemonSocketPath)
 	if err == nil {
-		log.Trace("removing socket file")
+		log.Trace("daemon: removing socket file")
 		err := os.Remove(config.Config().DaemonSocketPath)
 		if err != nil {
 			log.WithField("err", err).Error("Cannot remove unix socket file.")
