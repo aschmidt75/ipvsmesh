@@ -123,7 +123,7 @@ func DaemonStart(cmd *cli.Cmd) {
 			publisherUpdateCh := make(daemon.PublisherUpdateChanType)
 			publisherConfigUpdateCh := make(daemon.PublisherConfigUpdateChanType)
 
-			// Create an applier which reads from the channel and applies updates.
+			// Create an applier which reads from the channel and applies updates. controls service workers
 			configApplier := daemon.NewConfigApplierWorker(configUpdateCh, ipvsUpdateCh, publisherConfigUpdateCh)
 			ds.Register(&configApplier.StoppableByChan)
 			log.WithField("s", configApplier).Trace("registered")
@@ -143,7 +143,7 @@ func DaemonStart(cmd *cli.Cmd) {
 			log.WithField("s", publisherWorker).Trace("registered")
 			go publisherWorker.Worker()
 
-			// create an IPVSApplier (holding the central ipvs model)
+			// create an IPVSApplier (holding and applying the central ipvs model)
 			ipvsApplier := daemon.NewIPVSApplierWorker(ipvsUpdateCh, publisherUpdateCh)
 			ds.Register(&ipvsApplier.StoppableByChan)
 			log.WithField("s", ipvsApplier).Trace("registered")

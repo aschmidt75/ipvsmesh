@@ -42,6 +42,7 @@ type Publisher struct {
 	// Additional labels to target this publisher
 	Labels map[string]string `yaml:"labels,omitempty"`
 
+	// MatchLabels indicate what service this publisher should watch
 	MatchLabels map[string]string `yaml:"matchLabels"`
 
 	// Spec is the specification for a publisher. See
@@ -71,7 +72,10 @@ type ConfigProfile struct {
 	URL string `yaml:"url"`
 }
 
-// IPVSMeshConfig is the main confoguration structure
+// IPVSMeshConfig is the main confoguration structure. It contains
+// Global definitions, a set of services and a set of publishers.
+// Although this is not checked, a publisher without services does
+// not make sense.
 type IPVSMeshConfig struct {
 	Globals    Globals      `yaml:"globals,omitempty"`
 	Services   []*Service   `yaml:"services,omitempty"`
@@ -80,7 +84,10 @@ type IPVSMeshConfig struct {
 
 //
 
-// PluginSpec is a
+// PluginSpec is the specification for a plugin. It can
+// have a downward api to get updates from others to be incorporated
+// into the local ipvs config (e.g. docker containers), as well as an
+// upward api to publish local ipvs endpoints to others (e.g. k/v stores)
 type PluginSpec interface {
 
 	// Name returns the name of the plugin
@@ -93,7 +100,7 @@ type PluginSpec interface {
 
 	// RunNotificationLoop is a loop that pings the given channel
 	// whenever the plugin has detected an update. It terminates
-	// when it receives something on this channel
+	// when it receives something on this channel.
 	RunNotificationLoop(notChan chan struct{}) error
 
 	// GetDownwardData retrieves the data for real/backend servers
@@ -101,7 +108,7 @@ type PluginSpec interface {
 
 	// HasUpwardInterface returns true if this plugin can deliver
 	// data of the local ipvs table to other locations. We have something
-	// that it can use (e.g. publish on a k/v store)
+	// that it can use (e.g. to be published to a k/v store)
 	HasUpwardInterface() bool
 
 	// PushUpwardData is used to notify others upward about
@@ -113,8 +120,11 @@ type PluginSpec interface {
 // endpoint, with an address string suitable for ipvsctl's model.
 // It may contain additional data (e.g. ids) in a map.
 type DownwardBackendServer struct {
+	// Address is an endpoint spec that can be used to
+	// feed ipvsctl with it
 	Address string
 
+	// AdditionalInfo contains metadata such as the container id
 	AdditionalInfo map[string]string
 }
 
@@ -126,3 +136,7 @@ type UpwardData struct {
 	OriginService   *Service
 	TargetPublisher *Publisher
 }
+
+// IPVSModelStruct is a generic data/map struct for storing
+// an ipvsctl model
+type IPVSModelStruct map[string]interface{}
