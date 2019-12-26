@@ -40,7 +40,7 @@ func (s *Spec) initialize() error {
 
 // Name returns the plugin name
 func (s *Spec) Name() string {
-	return "docker-front-proxy"
+	return "dockerFrontProxy"
 }
 
 // HasDownwardInterface is true, plugin checks local docker containers for new ips
@@ -169,4 +169,8 @@ func (s *Spec) RunNotificationLoop(notChan chan struct{}) error {
 			return nil
 		}
 	}
+}
+
+func (s *Spec) PushUpwardData(data model.UpwardData) error {
+	return nil
 }

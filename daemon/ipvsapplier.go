@@ -17,14 +17,11 @@ import (
 // IPVSApplierUpdateStruct is a message from a plugin with a downward api.
 // The message affects a single service from the model and contains data updates.
 type IPVSApplierUpdateStruct struct {
-	serviceName string
 	cfg         *model.IPVSMeshConfig
+	serviceName string
 	service     *model.Service
 	data        []model.DownwardBackendServer
 }
-
-// IPVSModelStruct ...
-type IPVSModelStruct map[string]interface{}
 
 // IPVSApplierChanType ...
 type IPVSApplierChanType chan IPVSApplierUpdateStruct
@@ -35,24 +32,29 @@ type IPVSApplierChanType chan IPVSApplierUpdateStruct
 type IPVSApplierWorker struct {
 	StoppableByChan
 
-	updateChan IPVSApplierChanType
-	cfg        *model.IPVSMeshConfig
-	services   map[string]IPVSApplierUpdateStruct
-	mu         sync.Mutex
+	updateChan          IPVSApplierChanType
+	publisherUpdateChan PublisherUpdateChanType
+
+	cfg *model.IPVSMeshConfig
+
+	// remember all updates we received
+	services map[string]IPVSApplierUpdateStruct
+	mu       sync.Mutex
 }
 
 // NewIPVSApplierWorker creates an IPVS applier worker based on
 // an update channel and the recent model
-func NewIPVSApplierWorker(updateChan IPVSApplierChanType) *IPVSApplierWorker {
+func NewIPVSApplierWorker(updateChan IPVSApplierChanType, publisherUpdateChan PublisherUpdateChanType) *IPVSApplierWorker {
 	sc := make(chan *sync.WaitGroup, 1)
 
 	return &IPVSApplierWorker{
 		StoppableByChan: StoppableByChan{
 			StopChan: &sc,
 		},
-		updateChan: updateChan,
-		cfg:        nil,
-		services:   make(map[string]IPVSApplierUpdateStruct, 5),
+		updateChan:          updateChan,
+		publisherUpdateChan: publisherUpdateChan,
+		cfg:                 nil,
+		services:            make(map[string]IPVSApplierUpdateStruct, 5),
 	}
 }
 
@@ -65,6 +67,7 @@ func (s *IPVSApplierWorker) integrateUpdate(u IPVSApplierUpdateStruct) (map[stri
 	// this is the current model/config we're operating on
 	s.cfg = u.cfg
 
+	// fill in sane defaults. TODO: Refactor to global defaults struct
 	w := u.service.Weight
 	if w == 0 {
 		w = 1000
@@ -81,9 +84,10 @@ func (s *IPVSApplierWorker) integrateUpdate(u IPVSApplierUpdateStruct) (map[stri
 	// copy update into own cached model
 	s.services[u.serviceName] = u
 
-	// recreate target
-	var target IPVSModelStruct
-	target = make(IPVSModelStruct, 5)
+	// recreate target. IPVSModelStruct is map[string]interface{}, so
+	// here we're creating maps on the fly as the basis for a ipvsctl yaml file.
+	var target model.IPVSModelStruct
+	target = make(model.IPVSModelStruct, 5)
 
 	// count services with non-empty destinations list
 	numNonEmptyServices := 0
@@ -125,11 +129,11 @@ func (s *IPVSApplierWorker) integrateUpdate(u IPVSApplierUpdateStruct) (map[stri
 		idx++
 	}
 
-	// ensure "destinations"
-
 	return target, nil
 }
 
+// applyUpdate takes an ipvsctl-conformant im-memory struct and passes
+// it on to ipvsctl to be activated. This can be done in different ways.
 func (s *IPVSApplierWorker) applyUpdate(target map[string]interface{}) error {
 	//
 	b, err := yaml.Marshal(target)
@@ -159,9 +163,11 @@ func (s *IPVSApplierWorker) applyUpdate(target map[string]interface{}) error {
 	}).Debug("ipvsapplier: Applying with these settings...")
 	switch execType {
 	case "file-only":
+		// just write the file and be done
 		return ioutil.WriteFile(fileName, b, 0640)
 
 	case "file-and-exec":
+		// write the file and run ipvsctl apply
 		err := ioutil.WriteFile(fileName, b, 0640)
 		if err != nil {
 			return err
@@ -170,7 +176,7 @@ func (s *IPVSApplierWorker) applyUpdate(target map[string]interface{}) error {
 		return ipvsctl.Run()
 
 	case "exec-only":
-		// directly write into new process
+		// execute ipvsctl apply from stdin, directly write into new process
 		ipvsctl := exec.Command(ipvsctlPath, "apply")
 		buffer := bytes.Buffer{}
 		buffer.Write(b)
@@ -208,6 +214,11 @@ func (s *IPVSApplierWorker) Worker() {
 			err = s.applyUpdate(target)
 			if err != nil {
 				log.WithField("err", err).Error("ipvsapplier: Unable to apply update")
+			}
+
+			// Notify publishers about the change, so they can propagate it further
+			s.publisherUpdateChan <- PublisherUpdate{
+				data: target,
 			}
 
 		case wg := <-*s.StoppableByChan.StopChan:

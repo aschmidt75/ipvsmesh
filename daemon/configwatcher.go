@@ -11,6 +11,10 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// ConfigWatcherWorker is a continuously running loop
+// watching changes on a given config file. If the file
+// changes, it is read, parsed and passed on to an
+// update channel.
 type ConfigWatcherWorker struct {
 	StoppableByChan
 
@@ -59,7 +63,7 @@ func (s *ConfigWatcherWorker) Worker() {
 
 	}()
 
-	log.Debug("Processing file watcher updates.")
+	log.Debug("configwatcher: Processing file watcher updates.")
 	for {
 		select {
 		case event := <-w.Event:
@@ -99,10 +103,12 @@ func (s *ConfigWatcherWorker) readConfig() {
 
 	// walk over services, parse spec fields according to plugins
 
+	ok := true
 	for _, service := range cfg.Services {
 		spec, err := plugins.ReadPluginSpecByTypeString(service)
 		if err != nil {
 			log.WithField("err", err).Errorf("configwatcher: Unable to parse spec for service %s", service.Name)
+			ok = false
 			continue
 		}
 		log.WithFields(log.Fields{
@@ -110,6 +116,11 @@ func (s *ConfigWatcherWorker) readConfig() {
 			"name": spec.Name(),
 		}).Trace("configwatcher: spec")
 		service.Plugin = spec
+	}
+
+	if !ok {
+		log.Warn("configwatcher: There are configuration errors, will not apply this.")
+		return
 	}
 
 	// send new config to update channel

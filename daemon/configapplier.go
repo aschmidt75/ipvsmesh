@@ -8,7 +8,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// ConfigUpdateChanType is a channel that transmits the model
+// ConfigUpdateChanType is a channel that transmits updated configuration
 type ConfigUpdateChanType chan model.IPVSMeshConfig
 
 // ConfigApplierWorker is a worker listening on the update channel
@@ -16,15 +16,16 @@ type ConfigUpdateChanType chan model.IPVSMeshConfig
 type ConfigApplierWorker struct {
 	StoppableByChan
 
-	updateChan     ConfigUpdateChanType
-	ipvsUpdateChan IPVSApplierChanType
-	wg             sync.WaitGroup
-	scWorkers      chan *sync.WaitGroup
+	updateChan                ConfigUpdateChanType
+	ipvsUpdateChan            IPVSApplierChanType
+	publisherConfigUpdateChan PublisherConfigUpdateChanType
+	wg                        sync.WaitGroup
+	scWorkers                 chan *sync.WaitGroup
 }
 
 // NewConfigApplierWorker creates a Configuration applier worker based on
 // an update channel.
-func NewConfigApplierWorker(updateChan ConfigUpdateChanType, ipvsUpdateChan IPVSApplierChanType) *ConfigApplierWorker {
+func NewConfigApplierWorker(updateChan ConfigUpdateChanType, ipvsUpdateChan IPVSApplierChanType, publisherConfigUpdateChan PublisherConfigUpdateChanType) *ConfigApplierWorker {
 	sc := make(chan *sync.WaitGroup, 1)
 	scWorkers := make(chan *sync.WaitGroup, 1)
 
@@ -32,9 +33,10 @@ func NewConfigApplierWorker(updateChan ConfigUpdateChanType, ipvsUpdateChan IPVS
 		StoppableByChan: StoppableByChan{
 			StopChan: &sc,
 		},
-		updateChan:     updateChan,
-		scWorkers:      scWorkers,
-		ipvsUpdateChan: ipvsUpdateChan,
+		updateChan:                updateChan,
+		scWorkers:                 scWorkers,
+		ipvsUpdateChan:            ipvsUpdateChan,
+		publisherConfigUpdateChan: publisherConfigUpdateChan,
 	}
 }
 
@@ -44,11 +46,16 @@ func (s *ConfigApplierWorker) Worker() {
 		select {
 		case cfg := <-s.updateChan:
 			log.WithField("cfg", cfg).Debug("configapplier: Received new config")
+
+			// apply config to publisher worker
+			s.publisherConfigUpdateChan <- cfg
+
 			err := s.applyServices(cfg)
 			if err != nil {
-				log.WithField("err", err).Error("configapplier: Unable to apply configuration")
+				log.WithField("err", err).Error("configapplier: Unable to apply configuration (services)")
 			}
 
+			// done.
 			log.WithField("numServicesActive", GetAllServiceWorkers().Len()).Info("configapplier: Applied new configuration")
 
 		case wg := <-*s.StoppableByChan.StopChan:

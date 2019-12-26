@@ -5,20 +5,35 @@ parameters:
     type: file
     file: /some/where.yaml
 
-config:
-  docker-local-1:
-    type: docker
-    url: file:///var/run/docker.sock
-    watchEvents: true
-  etcd-2:
-    type: etcd
-    url: https://10.0.0.1:8443/
-    tls:
-      cacert: ./bla.crt
+globals:
+  ipvsctl:
+    executionType: file-only
+    file: ./ipvsctl.yaml
+  configProfiles:
+    docker-local-1:
+      type: docker
+      url: file:///var/run/docker.sock
+      watchEvents: true
+    etcd-2:
+      type: etcd
+      url: https://10.0.0.1:8443/
+      tls:
+        cacert: ./bla.crt
     
+publishers:
+  - name: etcd-upstream
+    type: etcdPublisher
+    matchLabels:
+      service: "1"
+    spec:
+      configProfile: etcd-2
+      path: /my/nginx-es/
+      
 services:
   - name: SampleService1
     type: dockerFrontProxy
+    labels:
+      service: "1"
     spec:
       address: ${host.eth0}:${portmap.PORT}
       dynamicWeights:

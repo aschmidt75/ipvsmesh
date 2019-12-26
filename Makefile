@@ -7,7 +7,7 @@ all: clean vet lint gen cover build
 
 .PHONY: build
 build:
-	CGO_ENABLED=0 go build -i -v -o release/${BINARY_NAME} -ldflags="-X main.version=${VERSION}" cmd/*.go
+	CGO_ENABLED=0 go build -i -v -o release/${BINARY_NAME} -ldflags="-X main.version=${VERSION}" ipvsmesh.go
 
 vet:
 	go vet cmd/*.go
