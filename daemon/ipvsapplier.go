@@ -70,7 +70,7 @@ func (s *IPVSApplierWorker) integrateUpdate(u IPVSApplierUpdateStruct) (map[stri
 	// fill in sane defaults. TODO: Refactor to global defaults struct
 	w := u.service.Weight
 	if w == 0 {
-		w = 1000
+		w = 1000 // TODO: Defaults
 	}
 	sched := u.service.SchedName
 	if sched == "" {
@@ -116,6 +116,11 @@ func (s *IPVSApplierWorker) integrateUpdate(u IPVSApplierUpdateStruct) (map[stri
 		td := make([]interface{}, len(service.data))
 		ts["destinations"] = td
 		for idx, downwardBackendServer := range service.data {
+			// adjust weight in case of dynamic weights
+			if downwardBackendServer.Weight >= 0 {
+				w = downwardBackendServer.Weight
+			}
+
 			tdd := make(map[string]interface{}, 3)
 			td[idx] = tdd
 			tdd["address"] = downwardBackendServer.Address

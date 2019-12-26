@@ -124,6 +124,9 @@ type DownwardBackendServer struct {
 	// feed ipvsctl with it
 	Address string
 
+	// Dynamic weight if assigned
+	Weight int
+
 	// AdditionalInfo contains metadata such as the container id
 	AdditionalInfo map[string]string
 }
