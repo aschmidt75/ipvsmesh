@@ -5,7 +5,7 @@ import (
 
 	"github.com/aschmidt75/ipvsmesh/model"
 	dockerfrontproxy "github.com/aschmidt75/ipvsmesh/plugins/docker-front-proxy"
-	etcdpublisher "github.com/aschmidt75/ipvsmesh/plugins/etcd-publisher"
+	filepublisher "github.com/aschmidt75/ipvsmesh/plugins/file-publisher"
 	socketfrontproxy "github.com/aschmidt75/ipvsmesh/plugins/socket-front-proxy"
 	"gopkg.in/yaml.v2"
 )
@@ -46,8 +46,8 @@ func ReadPublisherPluginSpecByTypeString(publisher *model.Publisher) (model.Plug
 	}
 
 	var res model.PluginSpec
-	if publisher.Type == "etcdPublisher" {
-		res = &etcdpublisher.Spec{}
+	if publisher.Type == "filePublisher" {
+		res = &filepublisher.Spec{}
 	}
 
 	if res == nil {

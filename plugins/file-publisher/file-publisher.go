@@ -1,4 +1,4 @@
-package etcdpublisher
+package filepublisher
 
 import (
 	"sync"
@@ -10,6 +10,9 @@ import (
 // Spec is the spec subpart of a service for the etcd publisher plugin
 type Spec struct {
 	MatchLabels map[string]string `yaml:"matchLabels"`
+
+	OutputFile string `yaml:"outputFile"`
+	OutputType string `yaml:"outputType,omitempty"`
 
 	mu sync.Mutex
 	// etcdclient
@@ -26,7 +29,7 @@ func (s *Spec) initialize() error {
 
 // Name returns the plugin name
 func (s *Spec) Name() string {
-	return "etcdPublisher"
+	return "filePublisher"
 }
 
 // Initialize the plugin
@@ -52,5 +55,8 @@ func (s *Spec) HasUpwardInterface() bool {
 
 func (s *Spec) PushUpwardData(data model.UpwardData) error {
 	log.WithField("data", data).Debug("PushUpwardData ->")
+
+	// write to file
+
 	return nil
 }

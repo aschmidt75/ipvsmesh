@@ -5,13 +5,13 @@ globals:
     file: ./ipvsctl.yaml
     
 publishers:
-  - name: etcd-upstream
-    type: etcdPublisher
-    matchLabels:
-      svc: "sample-1"     # publish only service which match these labels
+  - name: sampleFile
+    type: filePublisher
     spec:
-      configProfile: etcd-2
-      path: /my/nginx-es/
+      matchLabels:
+        svc: "sample-1"     # publish only service which match these labels
+      outputFile: /tmp/ipvsmesh-out-sample.yaml
+      outputType: yaml
       
 services:
   - name: SampleService1
