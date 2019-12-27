@@ -29,6 +29,11 @@ func (s *Spec) Name() string {
 	return "etcdPublisher"
 }
 
+// Initialize the plugin
+func (s *Spec) Initialize(globals *model.Globals) error {
+	return nil
+}
+
 func (s *Spec) HasDownwardInterface() bool {
 	return false
 }

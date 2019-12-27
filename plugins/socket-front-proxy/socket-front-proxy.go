@@ -41,15 +41,6 @@ type PortsSpec struct {
 }
 
 func (s *Spec) initialize() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.lastListeners = []Listener{}
-	if s.MatchSocket.Protocol == "udp" {
-		s.procnetfile = "/proc/net/udp"
-	}
-	s.procnetfile = "/proc/net/tcp"
-
 	return nil
 }
 
@@ -63,6 +54,30 @@ func (s *Spec) HasDownwardInterface() bool {
 	return true
 }
 
+// Initialize the plugin
+func (s *Spec) Initialize(globals *model.Globals) error {
+	log.Trace("socket-front-proxy: initialize")
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.lastListeners = []Listener{}
+
+	if s.MatchSocket.Protocol == "udp" {
+		s.procnetfile = "/proc/net/udp"
+	}
+	s.procnetfile = "/proc/net/tcp"
+
+	if globals != nil {
+		v, ex := globals.Settings["socketFrontProxy.procnet.file"]
+		if ex {
+			s.procnetfile = v
+			log.WithField("procnetfile", v).Trace("Using different proc-net file")
+		}
+	}
+	return nil
+}
+
 // GetDownwardData queries /proc/net/{tcp,udp} for listening sockets and
 // returns all entries matching the MatchSocket entry
 func (s *Spec) GetDownwardData() ([]model.DownwardBackendServer, error) {
@@ -74,7 +89,7 @@ func (s *Spec) GetDownwardData() ([]model.DownwardBackendServer, error) {
 
 			ip, ipnet, err := net.ParseCIDR(s.MatchSocket.Address)
 			if err != nil {
-				log.WithField("a", s.MatchSocket.Address).Error("Not in CIDR form, skipping")
+				log.WithField("a", s.MatchSocket.Address).Error("socket-front-proxy: Not in CIDR form, skipping")
 				continue
 			}
 			log.WithFields(log.Fields{
