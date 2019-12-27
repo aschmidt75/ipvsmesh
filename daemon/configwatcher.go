@@ -114,13 +114,39 @@ func (s *ConfigWatcherWorker) readConfig() {
 		log.WithFields(log.Fields{
 			"spec": spec,
 			"name": spec.Name(),
-		}).Trace("configwatcher: spec")
+		}).Trace("configwatcher: service spec")
+
+		spec.Initialize(&cfg.Globals)
 		service.Plugin = spec
+
+	}
+	for _, publisher := range cfg.Publishers {
+		var err error
+		spec, err := plugins.ReadPublisherPluginSpecByTypeString(publisher)
+		if err != nil {
+			log.WithField("err", err).Error("unable to parse spec for publisher %s", publisher.Name)
+			ok = false
+		}
+		log.WithFields(log.Fields{
+			"spec": spec,
+			"name": spec.Name(),
+		}).Trace("configwatcher: publisher spec")
+
+		spec.Initialize(&cfg.Globals)
+		publisher.Plugin = spec
 	}
 
 	if !ok {
 		log.Warn("configwatcher: There are configuration errors, will not apply this.")
 		return
+	}
+
+	// inject refs to globals to all services and publishers
+	for _, service := range cfg.Services {
+		service.Globals = &cfg.Globals
+	}
+	for _, publisher := range cfg.Publishers {
+		publisher.Globals = &cfg.Globals
 	}
 
 	// send new config to update channel

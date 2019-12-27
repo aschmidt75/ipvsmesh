@@ -30,6 +30,11 @@ type DynamicWeightsSpec struct {
 	MatchLabels map[string]string `yaml:"matchLabels"`
 }
 
+// Initialize the plugin
+func (s *Spec) Initialize(globals *model.Globals) error {
+	return s.initialize()
+}
+
 func (s *Spec) initialize() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

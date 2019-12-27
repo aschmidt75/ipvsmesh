@@ -1,1 +1,9 @@
-services: []
+services:
+- address: 10.0.0.1:80
+  destinations:
+  - address: 172.17.0.2:8005
+    forward: nat
+    weight: 0
+  ipvsmesh.service.name: nginx-service
+  ipvsmesh.service.type: socketFrontProxy
+  sched: wrr

@@ -1,0 +1,21 @@
+globals:
+  ipvsctl:
+    executionType: file-only
+    file: ./ipvsctl.yaml
+  settings:
+    socketFrontProxy.procnet.file: /tmp/pnt
+
+services:
+  - name: nginx-service
+    type: socketFrontProxy
+    address: 10.0.0.1:80
+    spec:
+      # this matchSocket spec will match all processes/ports
+      # listening on tcp ports ranges 8000-8010 within the
+      # address space of 172.17.0.0/16. 
+      matchSocket:
+        address: 172.17.0.0/16    # or ${host.eth0}
+        protocol: tcp
+        ports:
+          from: 8000
+          to: 8010

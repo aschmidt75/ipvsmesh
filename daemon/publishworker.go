@@ -4,7 +4,6 @@ import (
 	"sync"
 
 	"github.com/aschmidt75/ipvsmesh/model"
-	"github.com/aschmidt75/ipvsmesh/plugins"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -160,42 +159,6 @@ func (s *PublisherhWorker) walkUpdate_DELETE(upd PublisherUpdate) ([]*model.Publ
 	return res, nil
 }
 
-func (s *PublisherhWorker) triggerPublishing_DELETE(publishers []*model.Publisher) error {
-	for _, publisher := range publishers {
-		log.WithField("name", publisher.Name).Debug("PublisherWorker: Triggering publish update")
-
-		if publisher.Plugin == nil {
-			log.WithField("name", publisher.Name).Warn("PublisherWorker: Invalid plugin spec, skipping")
-			continue
-		}
-
-		originService, ex := s.getFirstServiceByLabels(publisher.MatchLabels)
-		if !ex {
-			log.WithField("name", publisher.Name).Warn("PublisherWorker: No services match MatchLabels, skipping")
-			continue
-		}
-
-		// Forward to plugin
-		ud := model.UpwardData{
-			Address:         originService.Address,
-			ServiceName:     originService.Name,
-			OriginService:   originService,
-			TargetPublisher: publisher,
-		}
-		err := publisher.Plugin.PushUpwardData(ud)
-		if err != nil {
-			log.WithFields(log.Fields{
-				"err":         err,
-				"serviceName": ud.ServiceName,
-			}).Error("PublisherWorker: Unable to trigger publishing")
-		} else {
-			s.publishedServices[ud.ServiceName] = true
-		}
-
-	}
-	return nil
-}
-
 // Worker checks downward notifications
 func (s *PublisherhWorker) Worker() {
 	log.Info("Starting publish worker...")
@@ -234,14 +197,6 @@ func (s *PublisherhWorker) Worker() {
 			s.cfg = cfg
 
 			for _, publisher := range cfg.Publishers {
-				// load plugin spec
-				if publisher.Plugin == nil {
-					var err error
-					publisher.Plugin, err = plugins.ReadPublisherPluginSpecByTypeString(publisher)
-					if err != nil {
-						log.WithField("err", err).Error("unable to parse spec for publisher")
-					}
-				}
 
 				_, ex := s.publisherSpecs[publisher.Name]
 

@@ -28,6 +28,8 @@ type Service struct {
 	Spec map[interface{}]interface{} `yaml:"spec"`
 
 	Plugin PluginSpec
+
+	Globals *Globals // back ref to global structs
 }
 
 // Publisher is a construct to watch services for updates and
@@ -50,12 +52,15 @@ type Publisher struct {
 	Spec map[interface{}]interface{} `yaml:"spec"`
 
 	Plugin PluginSpec
+
+	Globals *Globals // back ref to global structs
 }
 
 // Globals contains global configuration entries for all ipvsmesh
 type Globals struct {
-	Ipvsctl IpvsctlConfig            `yaml:"ipvsctl,omitempty"`
-	Config  map[string]ConfigProfile `yaml:"configProfiles,omitempty"`
+	Ipvsctl  IpvsctlConfig            `yaml:"ipvsctl,omitempty"`
+	Config   map[string]ConfigProfile `yaml:"configProfiles,omitempty"`
+	Settings map[string]string        `yaml:"settings"` // arbirtrary k/v settings, e.g. for plugins
 }
 
 // IpvsctlConfig describes the mode-of-operation for applying
@@ -92,6 +97,10 @@ type PluginSpec interface {
 
 	// Name returns the name of the plugin
 	Name() string
+
+	// Initializes the plugin with a ref to the globals struct, so the plugin
+	// can pull out settings from it.
+	Initialize(globals *Globals) error
 
 	// HasDownwardInterface returns true if this plugin can return
 	// ip addresses of ipvs real/backend servers. It produces something
