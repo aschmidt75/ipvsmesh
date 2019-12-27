@@ -54,8 +54,9 @@ type Publisher struct {
 
 // Globals contains global configuration entries for all ipvsmesh
 type Globals struct {
-	Ipvsctl IpvsctlConfig            `yaml:"ipvsctl,omitempty"`
-	Config  map[string]ConfigProfile `yaml:"configProfiles,omitempty"`
+	Ipvsctl  IpvsctlConfig            `yaml:"ipvsctl,omitempty"`
+	Config   map[string]ConfigProfile `yaml:"configProfiles,omitempty"`
+	Settings map[string]string        `yaml:"settings"` // arbirtrary k/v settings, e.g. for plugins
 }
 
 // IpvsctlConfig describes the mode-of-operation for applying
