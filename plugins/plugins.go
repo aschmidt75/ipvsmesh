@@ -6,6 +6,7 @@ import (
 	"github.com/aschmidt75/ipvsmesh/model"
 	dockerfrontproxy "github.com/aschmidt75/ipvsmesh/plugins/docker-front-proxy"
 	filepublisher "github.com/aschmidt75/ipvsmesh/plugins/file-publisher"
+	proxyfromfile "github.com/aschmidt75/ipvsmesh/plugins/proxy-from-file"
 	socketfrontproxy "github.com/aschmidt75/ipvsmesh/plugins/socket-front-proxy"
 	"gopkg.in/yaml.v2"
 )
@@ -25,6 +26,9 @@ func ReadPluginSpecByTypeString(service *model.Service) (model.PluginSpec, error
 	}
 	if service.Type == "socketFrontProxy" {
 		res = &socketfrontproxy.Spec{}
+	}
+	if service.Type == "proxyFromFile" {
+		res = &proxyfromfile.Spec{}
 	}
 
 	if res == nil {
