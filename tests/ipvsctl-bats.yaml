@@ -1,0 +1,12 @@
+services:
+- address: 10.0.0.1:80
+  destinations:
+  - address: 20.1.0.1:80
+    forward: nat
+    weight: 100
+  - address: 20.1.0.2
+    forward: nat
+    weight: 200
+  ipvsmesh.service.name: demo-service
+  ipvsmesh.service.type: proxyFromFile
+  sched: wrr
