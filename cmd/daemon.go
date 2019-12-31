@@ -55,7 +55,7 @@ func DaemonStart(cmd *cli.Cmd) {
 			}
 
 			if logfile != nil && *logfile != "" {
-				f, err := os.OpenFile(*logfile, os.O_WRONLY|os.O_APPEND, 0660)
+				f, err := os.OpenFile(*logfile, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0660)
 				if err != nil {
 					log.WithField("err", err).Fatal("unable to set up file logging")
 				}
