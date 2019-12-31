@@ -1,6 +1,7 @@
 package proxyfromfile
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -50,6 +51,70 @@ func (s *Spec) GetDownwardData() ([]model.DownwardBackendServer, error) {
 	if err != nil {
 		return res, err
 	}
+
+	if s.Type == "text" {
+		return s.getDownwardDataText(b)
+	}
+	if s.Type == "json" {
+		return s.getDownwardDataJSON(b)
+	}
+
+	return res, errors.New("invalid type")
+}
+
+func (s *Spec) getDownwardDataJSON(b []byte) ([]model.DownwardBackendServer, error) {
+	res := []model.DownwardBackendServer{}
+
+	var f interface{}
+
+	err := json.Unmarshal(b, &f)
+	if err != nil {
+		return res, err
+	}
+
+	//	log.WithField("f", f).Trace("Parsed.")
+	switch f.(type) {
+	case []interface{}:
+		l := f.([]interface{})
+		for _, lx := range l {
+			switch lx.(type) {
+			case map[string]interface{}:
+				m := lx.(map[string]interface{})
+				//				log.WithField("m", m).Trace("Parsing")
+
+				ip0, ex1 := m["ip"]
+				weight0, ex2 := m["weight"]
+
+				added := false
+				if ip, ok := ip0.(string); ex1 && ok {
+					if weight, ok2 := weight0.(float64); ex2 && ok2 {
+						// todo: validate data
+						res = append(res, model.DownwardBackendServer{
+							Address: ip,
+							Weight:  int(weight),
+						})
+						added = true
+					} else {
+						log.WithField("m", m).Warn("weight not valid")
+					}
+				} else {
+					log.WithField("m", m).Warn("ip not valid")
+				}
+				if !added {
+					log.WithField("m", m).Warn("invalid data")
+				}
+			default:
+				log.WithField("lx", lx).Trace("skipping, not a map.")
+			}
+		}
+	default:
+		log.WithField("f", f).Trace("skipping, not a list.")
+	}
+	return res, nil
+}
+
+func (s *Spec) getDownwardDataText(b []byte) ([]model.DownwardBackendServer, error) {
+	res := []model.DownwardBackendServer{}
 
 	lines := strings.Split(string(b), "\n")
 	for _, line := range lines {
