@@ -46,7 +46,7 @@ func NewService(groupID int) *Service {
 
 // Stop stops all running services
 func (s *Service) Stop(context.Context, *localinterface.Empty) (*localinterface.Empty, error) {
-	var timeoutSecs int = 10
+	var timeoutSecs int = config.Config().DefaultTimeout
 	log.WithField("timeoutSecs", timeoutSecs).Info("daemon: Stopping workers...")
 
 	// take down in reverse order

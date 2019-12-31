@@ -14,6 +14,7 @@ type Configuration struct {
 	DaemonConnTimeoutSecs int    `env:"IPVSMESH_DAEMON_TIMEOUT_SEC" envDefault:"5"`
 
 	DefaultConfigFile string `env:"IPVSMESH_CONFIGFILE" envDefault:"/etc/ipvsmesh.yaml"`
+	DefaultTimeout    int    `env:"IPVSMESH_SVCTIMEOUT" envDefault:"10"`
 
 	TLS         bool   `env:"IPVSMESH_TLS" envDefault:"false"`
 	TLSCertFile string `env:"IPVSMESH_TLSCERTFILE" envDefault:""`

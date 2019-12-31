@@ -21,11 +21,13 @@ type ConfigWatcherWorker struct {
 	configFileName string
 	lastModTime    time.Time
 	updateChan     ConfigUpdateChanType
+
+	onceFlag bool
 }
 
 // NewConfigWatcherWorker creates a new watcher on given config file. It reads
 // changes and sends updates to updateChan
-func NewConfigWatcherWorker(configFileName string, updateChan ConfigUpdateChanType) *ConfigWatcherWorker {
+func NewConfigWatcherWorker(configFileName string, updateChan ConfigUpdateChanType, onceFlag bool) *ConfigWatcherWorker {
 	sc := make(chan *sync.WaitGroup, 1)
 	return &ConfigWatcherWorker{
 		StoppableByChan: StoppableByChan{
@@ -33,6 +35,7 @@ func NewConfigWatcherWorker(configFileName string, updateChan ConfigUpdateChanTy
 		},
 		configFileName: configFileName,
 		updateChan:     updateChan,
+		onceFlag:       onceFlag,
 	}
 }
 
@@ -75,6 +78,11 @@ func (s *ConfigWatcherWorker) Worker() {
 					s.readConfig()
 					s.lastModTime = mt
 				}
+			}
+
+			if s.onceFlag {
+				log.Info("configwatcher: Stopping due to --once")
+				return
 			}
 		case err := <-w.Error:
 			log.Errorln(err)

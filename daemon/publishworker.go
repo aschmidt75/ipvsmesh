@@ -35,10 +35,13 @@ type PublisherhWorker struct {
 
 	// remember what services (by name) we have published.
 	publishedServices map[string]bool
+
+	onceFlag bool
+	onceCh   chan struct{}
 }
 
 // NewPublisherWorker creates a worker for publish notifications
-func NewPublisherWorker(updateChan PublisherUpdateChanType, configUpdateCh PublisherConfigUpdateChanType) *PublisherhWorker {
+func NewPublisherWorker(updateChan PublisherUpdateChanType, configUpdateCh PublisherConfigUpdateChanType, onceFlag bool, onceCh chan struct{}) *PublisherhWorker {
 	sc := make(chan *sync.WaitGroup, 1)
 	return &PublisherhWorker{
 		StoppableByChan: StoppableByChan{
@@ -46,6 +49,8 @@ func NewPublisherWorker(updateChan PublisherUpdateChanType, configUpdateCh Publi
 		},
 		updateCh:       updateChan,
 		configUpdateCh: configUpdateCh,
+		onceFlag:       onceFlag,
+		onceCh:         onceCh,
 
 		publisherSpecs:    make(map[string]*model.Publisher, 5),
 		publishedServices: make(map[string]bool, 5),
@@ -167,29 +172,34 @@ func (s *PublisherhWorker) Worker() {
 		select {
 		case upd := <-s.updateCh:
 			log.WithField("upd", upd).Debug("PublisherWorker: got backend update for publishing")
-		/*
-			publishers, err := s.walkUpdate(upd)
-			if err != nil {
-				log.WithField("err", err).Error("PublisherWorker: Unable to process publisher update")
-				continue
+			/*
+				publishers, err := s.walkUpdate(upd)
+				if err != nil {
+					log.WithField("err", err).Error("PublisherWorker: Unable to process publisher update")
+					continue
+				}
+
+				err = s.triggerPublishing(publishers)
+				if err != nil {
+					log.WithField("err", err).Error("PublisherWorker: Unable to publish update")
+					continue
+				}
+			*/
+
+			// store new updated model along side previous model. Split/map by service names
+
+			// Walk all publishers. Locate services by publishers
+			// compare new and previous model.
+			// 1. "new" contains a service and "previous" does not. Publish new endpoint
+			// 2. "new" contains a service and "previous" does also. Do nothing.
+			// 3. "new" is missing a service which "previous" contained. Remove endpoint
+
+			// "new" is recent now
+
+			if s.onceFlag {
+				log.Info("PublisherWorker: Stopping due to --once")
+				s.onceCh <- struct{}{}
 			}
-
-			err = s.triggerPublishing(publishers)
-			if err != nil {
-				log.WithField("err", err).Error("PublisherWorker: Unable to publish update")
-				continue
-			}
-		*/
-
-		// store new updated model along side previous model. Split/map by service names
-
-		// Walk all publishers. Locate services by publishers
-		// compare new and previous model.
-		// 1. "new" contains a service and "previous" does not. Publish new endpoint
-		// 2. "new" contains a service and "previous" does also. Do nothing.
-		// 3. "new" is missing a service which "previous" contained. Remove endpoint
-
-		// "new" is recent now
 
 		case cfg := <-s.configUpdateCh:
 			log.WithField("numPublishers", len(cfg.Publishers)).Debug("PublisherWorker: got config update")

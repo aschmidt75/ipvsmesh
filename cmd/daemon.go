@@ -28,9 +28,10 @@ func Daemon(cmd *cli.Cmd) {
 
 // DaemonStart starts the daemon either on foreground or background mode
 func DaemonStart(cmd *cli.Cmd) {
-	cmd.Spec = "[-f|--foreground] [--log-file=<logfile>] [--sudo] [--gid=<groupid>] [--config=<configfile>]"
+	cmd.Spec = "[-f|--foreground] [--log-file=<logfile>] [--sudo] [--gid=<groupid>] [--config=<configfile>] [--once]"
 	var (
 		foreground = cmd.BoolOpt("f foreground", false, "Run in foreground, do not daemonize")
+		once       = cmd.BoolOpt("o once", false, "Run loop only once, exit after first cycle")
 		logfile    = cmd.StringOpt("log-file", "", "optional log file destination. Default destination is syslog")
 		sudo       = cmd.BoolOpt("sudo", false, "use sudo when daemonizing")
 		groupID    = cmd.IntOpt("gid", -1, "optional group ID for socket and log file creation")
@@ -122,6 +123,7 @@ func DaemonStart(cmd *cli.Cmd) {
 			ipvsUpdateCh := make(daemon.IPVSApplierChanType)
 			publisherUpdateCh := make(daemon.PublisherUpdateChanType)
 			publisherConfigUpdateCh := make(daemon.PublisherConfigUpdateChanType)
+			onceCh := make(chan struct{})
 
 			// Create an applier which reads from the channel and applies updates. controls service workers
 			configApplier := daemon.NewConfigApplierWorker(configUpdateCh, ipvsUpdateCh, publisherConfigUpdateCh)
@@ -130,7 +132,7 @@ func DaemonStart(cmd *cli.Cmd) {
 			go configApplier.Worker()
 
 			// create a watcher on the config file. It will send updates to configUpdateCh
-			configWatcher := daemon.NewConfigWatcherWorker(*configfile, configUpdateCh)
+			configWatcher := daemon.NewConfigWatcherWorker(*configfile, configUpdateCh, *once)
 			ds.Register(&configWatcher.StoppableByChan)
 			log.WithField("s", configWatcher).Trace("registered")
 			go configWatcher.Worker()
@@ -138,7 +140,7 @@ func DaemonStart(cmd *cli.Cmd) {
 			// service workers will be created by configApplier dynamically
 
 			// publisher worker
-			publisherWorker := daemon.NewPublisherWorker(publisherUpdateCh, publisherConfigUpdateCh)
+			publisherWorker := daemon.NewPublisherWorker(publisherUpdateCh, publisherConfigUpdateCh, *once, onceCh)
 			ds.Register(&publisherWorker.StoppableByChan)
 			log.WithField("s", publisherWorker).Trace("registered")
 			go publisherWorker.Worker()
@@ -148,6 +150,16 @@ func DaemonStart(cmd *cli.Cmd) {
 			ds.Register(&ipvsApplier.StoppableByChan)
 			log.WithField("s", ipvsApplier).Trace("registered")
 			go ipvsApplier.Worker()
+
+			go func() {
+				for {
+					select {
+					case <-onceCh:
+						log.Trace("daemon: going down via internal stop")
+						ds.Stop(context.Background(), &localinterface.Empty{})
+					}
+				}
+			}()
 
 			// main loop, wait for commands from cmdline client as per grpc calls
 			ds.Start(context.Background())
