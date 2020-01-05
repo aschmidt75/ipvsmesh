@@ -1,0 +1,12 @@
+globals:
+  ipvsctl:
+    executionType: file-only
+    file: ./temp/ipvsctl-bats.yaml
+
+services:
+  - name: demo-service
+    type: dockerFrontProxy
+    address: 10.0.0.1:80
+    spec:
+      matchLabel:
+        app: nginx          
