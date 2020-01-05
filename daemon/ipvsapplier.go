@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"sync"
-	"time"
 
 	"github.com/aschmidt75/ipvsmesh/model"
 	log "github.com/sirupsen/logrus"
@@ -229,7 +228,6 @@ func (s *IPVSApplierWorker) Worker() {
 		case wg := <-*s.StoppableByChan.StopChan:
 			log.Info("ipvsapplier: Stopping IPVS Applier")
 
-			<-time.After(1 * time.Second)
 			wg.Done()
 			return
 		}

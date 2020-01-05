@@ -1,9 +1,12 @@
 services:
 - address: 10.0.0.1:80
   destinations:
-  - address: 172.17.0.2:8005
+  - address: 1.2.3.4:80
     forward: nat
-    weight: 0
-  ipvsmesh.service.name: nginx-service
-  ipvsmesh.service.type: socketFrontProxy
+    weight: 1000
+  - address: 1.2.3.5:81
+    forward: nat
+    weight: 10
+  ipvsmesh.service.name: demo-service
+  ipvsmesh.service.type: proxyFromFile
   sched: wrr

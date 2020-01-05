@@ -1,0 +1,17 @@
+globals:
+  ipvsctl:
+    executionType: file-only
+    file: ./ipvsctl.yaml
+
+services:
+  - name: demo-service
+    type: proxyFromFile
+    address: 10.0.0.1:80
+    spec:
+      # proxyFromFile plugin will watch this
+      # file for changes, pick them up and create and apply
+      # ipvsctl rules from it.
+      # type=text means 1 line per realserver
+      file: /tmp/demoproxy.dat
+      type: text
+      defaultWeight: 10

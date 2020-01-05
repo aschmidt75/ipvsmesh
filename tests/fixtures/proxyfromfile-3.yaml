@@ -1,0 +1,13 @@
+globals:
+  ipvsctl:
+    executionType: file-only
+    file: ./temp/ipvsctl-bats.yaml
+
+services:
+  - name: demo-service
+    type: proxyFromFile
+    address: 10.0.0.1:80
+    spec:
+      file: fixtures/proxyfromfile-data-1.txt
+      type: json
+      defaultWeight: 10

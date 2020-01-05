@@ -2,7 +2,6 @@ package daemon
 
 import (
 	"sync"
-	"time"
 
 	"github.com/aschmidt75/ipvsmesh/model"
 	log "github.com/sirupsen/logrus"
@@ -69,7 +68,6 @@ func (s *ConfigApplierWorker) Worker() {
 				l.Remove(e)
 			}
 
-			<-time.After(1 * time.Second)
 			wg.Done()
 			return
 		}
