@@ -9,4 +9,4 @@ services:
     address: 10.0.0.1:80
     spec:
       matchLabels:
-        app: nginx          
+        something: completelyDifferent          

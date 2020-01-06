@@ -45,3 +45,25 @@ teardown() {
     refute_output --partial ipvsmeshbats3
 
 }
+
+
+@test "dockerfrontproxy: ipvsmesh config w/ labeled (nonexisting) containers yields correct (empty) ipvsctl yaml (fixt. -2)" {
+    # make sure containers are running
+    run docker ps
+    assert_output --partial nginx
+ 
+    #
+    run ${IPVSMESH} --trace daemon start -f --log-file ${IPVSMESH_LOG} --config fixtures/dockerfrontproxy-2.yaml --once
+    assert_success
+    [ -f ${IPVSCTL_CONFIG} ]
+
+    /bin/cat ${IPVSCTL_CONFIG}
+    assert_success
+ 
+    assert_output --partial 'services: []'
+    refute_output --partial 'address: 10.0.0.1:80'
+    refute_output --partial ipvsmeshbats1
+    refute_output --partial ipvsmeshbats2
+    refute_output --partial ipvsmeshbats3
+
+}
