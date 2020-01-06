@@ -116,7 +116,7 @@ func (s *Spec) HasUpwardInterface() bool {
 }
 
 // RunNotificationLoop monitors /proc/net/{tcp,udp} for changes. Each matching event will trigger an update on notCh
-func (s *Spec) RunNotificationLoop(notChan chan struct{}) error {
+func (s *Spec) RunNotificationLoop(notChan chan struct{}, quitChan chan struct{}) error {
 	log.WithField("Name", s.Name()).Debug("socket-front-proxy: Starting notification loop")
 
 	err := s.initialize()
@@ -140,7 +140,7 @@ func (s *Spec) RunNotificationLoop(notChan chan struct{}) error {
 				log.Trace("socket-front-proxy: Found port update")
 				notChan <- struct{}{}
 			}
-		case <-notChan:
+		case <-quitChan:
 			log.WithField("Name", s.Name()).Debug("socket-front-proxy: Stopped notification loop")
 			return nil
 		}

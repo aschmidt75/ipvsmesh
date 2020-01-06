@@ -41,7 +41,7 @@ func (s *Spec) HasDownwardInterface() bool {
 	return false
 }
 
-func (s *Spec) RunNotificationLoop(notChan chan struct{}) error {
+func (s *Spec) RunNotificationLoop(notChan chan struct{}, quitChan chan struct{}) error {
 	return nil
 }
 
