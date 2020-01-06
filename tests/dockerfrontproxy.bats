@@ -36,7 +36,7 @@ teardown() {
     assert_success
     [ -f ${IPVSCTL_CONFIG} ]
 
-    /bin/cat ${IPVSCTL_CONFIG}
+    run /bin/cat ${IPVSCTL_CONFIG}
     assert_success
  
     assert_output --partial 'address: 10.0.0.1:80'
@@ -45,7 +45,6 @@ teardown() {
     refute_output --partial ipvsmeshbats3
 
 }
-
 
 @test "dockerfrontproxy: ipvsmesh config w/ labeled (nonexisting) containers yields correct (empty) ipvsctl yaml (fixt. -2)" {
     # make sure containers are running
@@ -57,7 +56,7 @@ teardown() {
     assert_success
     [ -f ${IPVSCTL_CONFIG} ]
 
-    /bin/cat ${IPVSCTL_CONFIG}
+    run /bin/cat ${IPVSCTL_CONFIG}
     assert_success
  
     assert_output --partial 'services: []'
