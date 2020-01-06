@@ -204,7 +204,7 @@ func (s *Spec) HasUpwardInterface() bool {
 }
 
 // RunNotificationLoop ...
-func (s *Spec) RunNotificationLoop(notChan chan struct{}) error {
+func (s *Spec) RunNotificationLoop(notChan chan struct{}, quitChan chan struct{}) error {
 	log.WithField("Name", s.Name()).Debug("proxy-from-file: Starting notification loop")
 
 	w := watcher.New()
@@ -245,7 +245,7 @@ func (s *Spec) RunNotificationLoop(notChan chan struct{}) error {
 		case <-w.Closed:
 			log.Info("proxy-from-file: Stopping Configuratiom Watcher")
 			return nil
-		case <-notChan:
+		case <-quitChan:
 			log.WithField("Name", s.Name()).Debug("proxy-from-file: Stopped notification loop")
 			return nil
 		}

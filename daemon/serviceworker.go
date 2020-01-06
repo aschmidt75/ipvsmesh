@@ -100,11 +100,12 @@ func (s *ServiceWorker) Worker() {
 	s.queryAndProcessDownwardData()
 
 	updateCh := make(chan struct{})
+	quitCh := make(chan struct{})
 	p := s.service.Plugin
 	if p != nil {
 		if p.HasDownwardInterface() {
 			// set up notification
-			go p.RunNotificationLoop(updateCh)
+			go p.RunNotificationLoop(updateCh, quitCh)
 		}
 	}
 
@@ -116,7 +117,7 @@ func (s *ServiceWorker) Worker() {
 		case wg := <-*s.StoppableByChan.StopChan:
 			log.WithField("Name", s.service.Name).Info("serviceworker: Stopping service worker")
 			wg.Done()
-			updateCh <- struct{}{}
+			quitCh <- struct{}{}
 			return
 		}
 	}

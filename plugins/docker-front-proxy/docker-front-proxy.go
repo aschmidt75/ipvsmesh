@@ -165,7 +165,7 @@ func (s *Spec) HasUpwardInterface() bool {
 
 // RunNotificationLoop connects to docker daemon and waits for
 // container events. Each matching event will trigger an update on notCh
-func (s *Spec) RunNotificationLoop(notChan chan struct{}) error {
+func (s *Spec) RunNotificationLoop(notChan chan struct{}, quitChan chan struct{}) error {
 	log.WithField("Name", s.Name()).Debug("docker-front-proxy: Starting notification loop")
 
 	err := s.initialize()
@@ -202,7 +202,7 @@ func (s *Spec) RunNotificationLoop(notChan chan struct{}) error {
 					notChan <- struct{}{}
 				}()
 			}
-		case <-notChan:
+		case <-quitChan:
 			log.WithField("Name", s.Name()).Debug("docker-front-proxy: Stopped notification loop")
 			return nil
 		}

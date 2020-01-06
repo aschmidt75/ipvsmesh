@@ -109,8 +109,8 @@ type PluginSpec interface {
 
 	// RunNotificationLoop is a loop that pings the given channel
 	// whenever the plugin has detected an update. It terminates
-	// when it receives something on this channel.
-	RunNotificationLoop(notChan chan struct{}) error
+	// when it receives something on quitChan.
+	RunNotificationLoop(notChan chan struct{}, quitChan chan struct{}) error
 
 	// GetDownwardData retrieves the data for real/backend servers
 	GetDownwardData() ([]DownwardBackendServer, error)
