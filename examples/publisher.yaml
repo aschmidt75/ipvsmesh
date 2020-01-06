@@ -20,5 +20,5 @@ services:
       svc: "sample-1"   # mark this service with this label
     spec:
       address: 10.1.2.3:80
-      matchLabel:
+      matchLabels:
         app: nginx          

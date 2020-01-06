@@ -3,5 +3,5 @@ services:
     type: dockerFrontProxy
     address: 10.0.0.1:80
     spec:
-      matchLabel:
+      matchLabels:
         app: nginx          # will select all containers with label app=nginx
