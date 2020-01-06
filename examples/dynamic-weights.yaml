@@ -10,12 +10,12 @@ services:
     type: dockerFrontProxy
     spec:
       address: 10.0.0.1:80
-      matchLabel:
+      matchLabels:
         app: nginx          # will select all containers with label app=nginx
       dynamicWeights:
       - weight: 100
-        matchLabel:
+        matchLabels:
           version: v5       # all containers with label version=v5 will get a weight of 100
       - weight: 0
-        matchLabel:
+        matchLabels:
           version: v6       # all containers with label version=v6 will get a weight of 0
