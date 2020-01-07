@@ -1,0 +1,17 @@
+globals:
+  ipvsctl:
+    executionType: file-only
+    file: ./temp/ipvsctl-bats.yaml
+
+services:
+  - name: demo-service
+    type: socketFrontProxy
+    address: 10.0.0.1:80
+    spec:
+      matchSocket:
+        address: 127.0.0.1/8
+        protocol: tcp
+        ports:
+          from: 9001
+          to: 9009
+        
