@@ -115,6 +115,22 @@ func (s *Spec) HasUpwardInterface() bool {
 	return false
 }
 
+func (s *Spec) queryProcNetOnce(notChan chan struct{}) {
+	var listeners []Listener
+
+	listeners, err := ParseProcNetTcpUdpFromFile(s.procnetfile)
+	if err != nil {
+		log.WithField("err", err).Error("Unable to read from proc net file, skipping")
+		return
+	}
+	if reflect.DeepEqual(s.lastListeners, listeners) == false {
+		s.lastListeners = listeners
+		log.Trace("socket-front-proxy: Found port update")
+		notChan <- struct{}{}
+	}
+
+}
+
 // RunNotificationLoop monitors /proc/net/{tcp,udp} for changes. Each matching event will trigger an update on notCh
 func (s *Spec) RunNotificationLoop(notChan chan struct{}, quitChan chan struct{}) error {
 	log.WithField("Name", s.Name()).Debug("socket-front-proxy: Starting notification loop")
@@ -125,21 +141,12 @@ func (s *Spec) RunNotificationLoop(notChan chan struct{}, quitChan chan struct{}
 		return err
 	}
 
+	s.queryProcNetOnce(notChan)
+
 	for {
 		select {
 		case <-time.After(1000 * time.Millisecond):
-			var listeners []Listener
-
-			listeners, err = ParseProcNetTcpUdpFromFile(s.procnetfile)
-			if err != nil {
-				log.WithField("err", err).Error("Unable to read from proc net file")
-				continue
-			}
-			if reflect.DeepEqual(s.lastListeners, listeners) == false {
-				s.lastListeners = listeners
-				log.Trace("socket-front-proxy: Found port update")
-				notChan <- struct{}{}
-			}
+			s.queryProcNetOnce(notChan)
 		case <-quitChan:
 			log.WithField("Name", s.Name()).Debug("socket-front-proxy: Stopped notification loop")
 			return nil
