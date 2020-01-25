@@ -19,3 +19,17 @@ services:
       - weight: 0
         matchLabels:
           version: v6       # all containers with label version=v6 will get a weight of 0
+
+  - name: app-service
+    type: socketFrontProxy
+    spec:
+      address: 10.0.0.2:80
+      protocol: tcp
+      ports:
+        from: 8000
+        to: 8010
+      dynamicWeights:       # assign dynamic weights via port map
+      - weight: 100
+        ports: 8000-8007
+      - weight: 0
+        ports: 8008,8009-8010

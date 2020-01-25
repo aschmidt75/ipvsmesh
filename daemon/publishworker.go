@@ -1,7 +1,10 @@
 package daemon
 
 import (
+	"errors"
+	"fmt"
 	"sync"
+	"time"
 
 	"github.com/aschmidt75/ipvsmesh/model"
 	log "github.com/sirupsen/logrus"
@@ -33,8 +36,9 @@ type PublisherhWorker struct {
 	// maps publisher names to their specs
 	publisherSpecs map[string]*model.Publisher
 
-	// remember what services (by name) we have published.
-	publishedServices map[string]bool
+	// remember last process publisher update to be able
+	// to compare it with the recent one and find the diff.
+	last, recent PublisherUpdate
 
 	onceFlag bool
 	onceCh   chan struct{}
@@ -52,11 +56,13 @@ func NewPublisherWorker(updateChan PublisherUpdateChanType, configUpdateCh Publi
 		onceFlag:       onceFlag,
 		onceCh:         onceCh,
 
-		publisherSpecs:    make(map[string]*model.Publisher, 5),
-		publishedServices: make(map[string]bool, 5),
+		publisherSpecs: make(map[string]*model.Publisher, 5),
+		last:           PublisherUpdate{data: make(map[string]interface{}, 0)},
+		recent:         PublisherUpdate{data: make(map[string]interface{}, 0)},
 	}
 }
 
+// given a service name, this returns the labels of the given service
 func (s *PublisherhWorker) getLabelsByServiceName(name string) (map[string]string, bool) {
 	for _, service := range s.cfg.Services {
 		if service.Name == name {
@@ -66,7 +72,7 @@ func (s *PublisherhWorker) getLabelsByServiceName(name string) (map[string]strin
 	return make(map[string]string, 0), false
 }
 
-func (s *PublisherhWorker) getFirstServiceByLabels(matchLabels map[string]string) (*model.Service, bool) {
+func (s *PublisherhWorker) getFirstServiceByMatchLabels(matchLabels map[string]string) (*model.Service, bool) {
 	for _, service := range s.cfg.Services {
 		found := true
 		for k, v := range matchLabels {
@@ -81,87 +87,198 @@ func (s *PublisherhWorker) getFirstServiceByLabels(matchLabels map[string]string
 	}
 	return nil, false
 }
-func (s *PublisherhWorker) findPublishersByLabels(matchLabels map[string]string) []*model.Publisher {
-	res := make([]*model.Publisher, 0, 5)
-	log.WithField("matchLabels", matchLabels).Trace("Looking for publishers with these labels")
 
-	for publisherName, publisher := range s.publisherSpecs {
-		/*		log.WithFields(log.Fields{
-					"name":   publisherName,
-					"labels": publisher.MatchLabels,
-				}).Trace("Comparing publisher")
-		*/
+func (s *PublisherhWorker) getServicesByMatchLabels(matchLabels map[string]string) []*model.Service {
+	res := make([]*model.Service, 0)
+
+	for _, service := range s.cfg.Services {
 		found := true
 		for k, v := range matchLabels {
-			vv, ex := publisher.MatchLabels[k]
+			vv, ex := service.Labels[k]
 			if !ex || v != vv {
 				found = false
 			}
 		}
-
 		if found {
-			log.WithFields(log.Fields{
-				"name": publisherName,
-				"l":    matchLabels,
-			}).Trace("Found publisher by labels")
-			res = append(res, publisher)
+			res = append(res, service)
 		}
 	}
-
 	return res
 }
 
-// walks over a PublisherUpdate, looks up affected
-// services/publishers and returns a list of them
-func (s *PublisherhWorker) walkUpdate_DELETE(upd PublisherUpdate) ([]*model.Publisher, error) {
-	servicesRaw, ex := upd.data["services"]
-	if !ex {
-		// no services there. Notify all publishers to take down existings endpoints
-		log.Debug("PublisherWorker: No services")
-		return make([]*model.Publisher, 0), nil
+func (s *PublisherhWorker) processUpdateForServiceAndPublisher(service *model.Service, p *model.Publisher, eu model.EndpointUpdate) {
+
+	// from given publisher, filter all services with matching p.MatchLabels
+	matchingServices := make(map[string]*model.Service, len(s.cfg.Services))
+	for _, matchingService := range s.getServicesByMatchLabels(p.MatchLabels) {
+		matchingServices[matchingService.Name] = matchingService
 	}
+	log.WithField("matchingSvcs", matchingServices).Tracef("Done matching services for publisher %s", p.Name)
 
-	services := servicesRaw.([]interface{})
+	// compare new and previous model regarding MatchLabels given service
 
-	m := make(map[string]*model.Publisher)
+	lastServicesRaw, ex := s.last.data["services"]
+	if !ex {
+		lastServicesRaw = make([]interface{}, 0)
+	}
+	lastServices := lastServicesRaw.([]interface{})
 
-	for _, serviceRaw := range services {
-		service := serviceRaw.(map[string]interface{})
+	recentServicesRaw, ex := s.recent.data["services"]
+	if !ex {
+		recentServicesRaw = make([]interface{}, 0)
+	}
+	recentServices := recentServicesRaw.([]interface{})
+
+	// walk the "recent" list.
+	for _, recentServiceRaw := range recentServices {
+		recentService := recentServiceRaw.(map[string]interface{})
+		recentAddress := recentService["address"]
+
+		recentAddressStr := recentAddress.(string)
 
 		// find out with ipvsmesh service is behind this ipvsctl service
-		serviceName, ex := service["ipvsmesh.service.name"].(string)
+		recentServiceName, ex := recentService["ipvsmesh.service.name"].(string)
 		if !ex {
-			log.WithField("serviceName", serviceName).Error("PublisherWorker: Internal error, unable to track ipvsctl service.")
+			continue
+		}
+		// check match labels. if we cannot find it, skip it because its not covered by matchLabels
+		_, ex = matchingServices[recentServiceName]
+		if !ex {
 			continue
 		}
 
-		// look up labels of service
-		labels, found := s.getLabelsByServiceName(serviceName)
+		*eu.Endpoints = append(*eu.Endpoints, recentAddressStr)
+
+		// try to find this address in lastServices
+		found := false
+		for _, lastServiceRaw := range lastServices {
+			lastService := lastServiceRaw.(map[string]interface{})
+			lastAddress := lastService["address"]
+
+			lastServiceName, ex := lastService["ipvsmesh.service.name"].(string)
+			if !ex {
+				continue
+			}
+			_, ex = matchingServices[lastServiceName]
+			if !ex {
+				continue
+			}
+
+			if recentAddress == lastAddress {
+				found = true
+			}
+		}
 		if !found {
-			log.WithField("serviceName", serviceName).Error("PublisherWorker: Internal error, unable to find ipvsctl service (2).")
+			// 1. "recent" contains a service and "last" does not. This one is new, publish new endpoint
+			log.WithFields(log.Fields{
+				"svcname": recentServiceName,
+				"a":       recentAddress,
+			}).Debug("PublisherWorker: New endpoint appeared.")
+			*eu.Delta = append(*eu.Delta, model.EndpointDelta{
+				ChangeType:     "appeared",
+				Address:        recentAddressStr,
+				AdditionalInfo: fmt.Sprintf("fromService=%s", recentServiceName),
+			})
+		} else {
+			// 2. "recent" contains a service and "last" does also. skip
+		}
+
+	}
+
+	// Find missing ones. Walk the "last" list.
+	for _, lastServiceRaw := range lastServices {
+		lastService := lastServiceRaw.(map[string]interface{})
+		lastAddress := lastService["address"]
+
+		lastServiceName, ex := lastService["ipvsmesh.service.name"].(string)
+		if !ex {
 			continue
 		}
-		log.WithField("labels", labels).Trace("PublisherWorker: Labels for service name")
+		_, ex = matchingServices[lastServiceName]
+		if !ex {
+			continue
+		}
 
-		// look up publishers with these labels
-		publishers := s.findPublishersByLabels(labels)
-		log.WithFields(log.Fields{
-			"num":         len(publishers),
-			"serviceName": serviceName,
-		}).Trace("PublisherWorker: Found publishers for matchLabels")
-		for _, p := range publishers {
-			m[p.Name] = p
+		// try to find this address in recentServices
+		found := false
+		for _, recentServiceRaw := range recentServices {
+			recentService := recentServiceRaw.(map[string]interface{})
+			recentAddress := recentService["address"]
+
+			// find out with ipvsmesh service is behind this ipvsctl service
+			recentServiceName, ex := recentService["ipvsmesh.service.name"].(string)
+			if !ex {
+				continue
+			}
+			// check match labels. if we cannot find it, skip it because its not covered by matchLabels
+			_, ex = matchingServices[recentServiceName]
+			if !ex {
+				continue
+			}
+
+			if recentAddress == lastAddress {
+				found = true
+			}
+		}
+		if !found {
+			// 1. "last" contained a service and now "recent" does not. This one has vanished, remove endpoint
+			log.WithFields(log.Fields{
+				"svcname": lastServiceName,
+				"a":       lastAddress,
+			}).Debug("PublisherWorker: Endpoint vanished.")
+			*eu.Delta = append(*eu.Delta, model.EndpointDelta{
+				ChangeType:     "vanished",
+				Address:        lastAddress.(string),
+				AdditionalInfo: fmt.Sprintf("fromService=%s", lastServiceName),
+			})
+		} else {
+			// 2. "last" contains a service and "last" does also. We already found that one above, skip.
 		}
 	}
 
-	res := make([]*model.Publisher, len(m))
-	idx := 0
-	for _, v := range m {
-		res[idx] = v
-		idx++
+}
+
+func (s *PublisherhWorker) processUpdateForPublisher(upd PublisherUpdate, p *model.Publisher) (model.EndpointUpdate, error) {
+	delta := make([]model.EndpointDelta, 0)
+	endpoints := make([]string, 0)
+	eu := model.EndpointUpdate{
+		Timestamp: fmt.Sprintf("%d", time.Now().UnixNano()),
+		Delta:     &delta,
+		Endpoints: &endpoints,
 	}
 
-	return res, nil
+	// Locate services by publishers, via MatchLabels
+	services := s.getServicesByMatchLabels(p.MatchLabels)
+	for _, service := range services {
+		s.processUpdateForServiceAndPublisher(service, p, eu)
+
+	}
+
+	return eu, nil
+}
+
+func (s *PublisherhWorker) processUpdateForPublishers(upd PublisherUpdate) error {
+	var publisherErr error
+	for name, publisher := range s.publisherSpecs {
+		eus, err := s.processUpdateForPublisher(upd, publisher)
+		if err != nil {
+			log.WithField("pname", name).Error(err)
+			publisherErr = errors.New("some publishers returned errors for this update")
+		}
+		//
+		log.WithField("data", eus).Trace("EndpointUpdate")
+
+		// has something changed?
+		if eus.Delta != nil && len(*eus.Delta) > 0 {
+			// yes, push to the publisher to do sth with it
+			publisher.Plugin.PushUpwardData(model.UpwardData{
+				Update:          eus,
+				TargetPublisher: publisher,
+			})
+		}
+	}
+
+	return publisherErr
 }
 
 // Worker checks downward notifications
@@ -172,29 +289,16 @@ func (s *PublisherhWorker) Worker() {
 		select {
 		case upd := <-s.updateCh:
 			log.WithField("upd", upd).Debug("PublisherWorker: got backend update for publishing")
-			/*
-				publishers, err := s.walkUpdate(upd)
-				if err != nil {
-					log.WithField("err", err).Error("PublisherWorker: Unable to process publisher update")
-					continue
-				}
-
-				err = s.triggerPublishing(publishers)
-				if err != nil {
-					log.WithField("err", err).Error("PublisherWorker: Unable to publish update")
-					continue
-				}
-			*/
 
 			// store new updated model along side previous model. Split/map by service names
+			s.recent = upd
 
-			// Walk all publishers. Locate services by publishers
-			// compare new and previous model.
-			// 1. "new" contains a service and "previous" does not. Publish new endpoint
-			// 2. "new" contains a service and "previous" does also. Do nothing.
-			// 3. "new" is missing a service which "previous" contained. Remove endpoint
-
-			// "new" is recent now
+			// Walk all publishers, process update
+			if err := s.processUpdateForPublishers(upd); err != nil {
+				log.Error(err)
+			}
+			// "last" is recent now
+			s.last = s.recent
 
 			if s.onceFlag {
 				log.Info("PublisherWorker: Stopping due to --once")

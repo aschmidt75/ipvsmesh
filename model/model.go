@@ -142,13 +142,27 @@ type DownwardBackendServer struct {
 
 // UpwardData contains an endpoint in form of an ipvs address
 type UpwardData struct {
-	Address     string
-	ServiceName string
-
-	OriginService   *Service
+	Update          EndpointUpdate
 	TargetPublisher *Publisher
 }
 
 // IPVSModelStruct is a generic data/map struct for storing
 // an ipvsctl model
 type IPVSModelStruct map[string]interface{}
+
+// EndpointUpdate is a data set used by publishers to indicate status
+// changes of endpoints managed by the daemon. It may contain a delta
+// and the current state.
+type EndpointUpdate struct {
+	Timestamp      string           `json:"timestamp" yaml:"timestamp"`
+	Delta          *[]EndpointDelta `json:"delta,omitempty" yaml:"delta,omitempty"`
+	Endpoints      *[]string        `json:"endpoints,omitempty" yaml:"endpoints,omitempty"`
+	AdditionalInfo string           `json:"info,omitempty" yaml:"info,omitempty"`
+}
+
+// EndpointDelta is a change notification about a single endpoint
+type EndpointDelta struct {
+	ChangeType     string `json:"type" yaml:"type"`
+	Address        string `json:"address" yaml:"address"`
+	AdditionalInfo string `json:"info,omitempty" yaml:"info,omitempty"`
+}
