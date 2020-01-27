@@ -6,7 +6,7 @@ IPVSMESH_CONFIG="$(dirname $BATS_TEST_FILENAME)/temp/ipvsmesh.yaml"
 IPVSMESH="$(dirname $BATS_TEST_FILENAME)/../release/ipvsmesh"
 IPVSMESH_LOG="$(dirname $BATS_TEST_FILENAME)/temp/ipvsmesh-bats.log"
 IPVSMESH_OUT1="$(dirname $BATS_TEST_FILENAME)/temp/ipvmesh-publisher-sample-1.yaml"
-IPVSMESH_OUT2="$(dirname $BATS_TEST_FILENAME)/temp/ipvmesh-publisher-sample-1.yaml"
+IPVSMESH_OUT2="$(dirname $BATS_TEST_FILENAME)/temp/ipvmesh-publisher-sample-2.yaml"
 
 export IPVSMESH_SVCTIMEOUT=0
 
@@ -46,4 +46,6 @@ teardown() {
     refute_output --partial '172\.' # no internal docker addresses
 
     refute_output --partial 'fromService=SampleService2'
+
+    [ ! -f ${IPVSMESH_OUT1} ]
 }

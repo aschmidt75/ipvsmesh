@@ -11,8 +11,6 @@ import (
 
 // Spec is the spec subpart of a service for the etcd publisher plugin
 type Spec struct {
-	MatchLabels map[string]string `yaml:"matchLabels"`
-
 	Output OutputSpec `yaml:"output"`
 
 	mu sync.Mutex

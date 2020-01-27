@@ -256,7 +256,6 @@ func (s *PublisherhWorker) processUpdateForPublisher(upd PublisherUpdate, p *mod
 	}
 
 	log.WithField("pml", p.MatchLabels).Trace("PublisherWorker: processUpdateForPublisher")
-	log.Tracef("%#v", p)
 
 	// Locate services by publishers, via MatchLabels
 	services := s.getServicesByMatchLabels(p.MatchLabels)
