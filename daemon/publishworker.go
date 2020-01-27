@@ -90,6 +90,9 @@ func (s *PublisherhWorker) getFirstServiceByMatchLabels(matchLabels map[string]s
 
 func (s *PublisherhWorker) getServicesByMatchLabels(matchLabels map[string]string) []*model.Service {
 	res := make([]*model.Service, 0)
+	if len(matchLabels) == 0 {
+		return res
+	}
 
 	for _, service := range s.cfg.Services {
 		found := true
@@ -100,6 +103,11 @@ func (s *PublisherhWorker) getServicesByMatchLabels(matchLabels map[string]strin
 			}
 		}
 		if found {
+			log.WithFields(log.Fields{
+				"ml": matchLabels,
+				"sl": service.Labels,
+				"sn": service.Name,
+			}).Trace("Found matching service")
 			res = append(res, service)
 		}
 	}
@@ -108,12 +116,12 @@ func (s *PublisherhWorker) getServicesByMatchLabels(matchLabels map[string]strin
 
 func (s *PublisherhWorker) processUpdateForServiceAndPublisher(service *model.Service, p *model.Publisher, eu model.EndpointUpdate) {
 
-	// from given publisher, filter all services with matching p.MatchLabels
+	// from given publisher, filter all services matching p.MatchLabels, re-org in map
 	matchingServices := make(map[string]*model.Service, len(s.cfg.Services))
 	for _, matchingService := range s.getServicesByMatchLabels(p.MatchLabels) {
 		matchingServices[matchingService.Name] = matchingService
 	}
-	log.WithField("matchingSvcs", matchingServices).Tracef("Done matching services for publisher %s", p.Name)
+	log.WithField("matchingSvcs", matchingServices).Tracef("PublisherWorker: Done matching services for publisher %s", p.Name)
 
 	// compare new and previous model regarding MatchLabels given service
 
@@ -247,6 +255,9 @@ func (s *PublisherhWorker) processUpdateForPublisher(upd PublisherUpdate, p *mod
 		Endpoints: &endpoints,
 	}
 
+	log.WithField("pml", p.MatchLabels).Trace("PublisherWorker: processUpdateForPublisher")
+	log.Tracef("%#v", p)
+
 	// Locate services by publishers, via MatchLabels
 	services := s.getServicesByMatchLabels(p.MatchLabels)
 	for _, service := range services {
@@ -266,9 +277,9 @@ func (s *PublisherhWorker) processUpdateForPublishers(upd PublisherUpdate) error
 			publisherErr = errors.New("some publishers returned errors for this update")
 		}
 		//
-		log.WithField("data", eus).Trace("EndpointUpdate")
+		log.WithField("data", eus).Trace("PublisherWorker: EndpointUpdate")
 
-		// has something changed?
+		// did something change, do we have a delta?
 		if eus.Delta != nil && len(*eus.Delta) > 0 {
 			// yes, push to the publisher to do sth with it
 			publisher.Plugin.PushUpwardData(model.UpwardData{
@@ -318,13 +329,13 @@ func (s *PublisherhWorker) Worker() {
 					log.WithFields(log.Fields{
 						"spec": publisher.Spec,
 						"name": publisher.Name,
-					}).Trace("New publisher")
+					}).Trace("PublisherWorker: New publisher")
 					s.publisherSpecs[publisher.Name] = publisher
 				} else {
 					log.WithFields(log.Fields{
 						"spec": publisher.Spec,
 						"name": publisher.Name,
-					}).Trace("Updated publisher")
+					}).Trace("PublisherWorker: Updated publisher")
 					s.publisherSpecs[publisher.Name] = publisher
 				}
 
@@ -347,7 +358,7 @@ func (s *PublisherhWorker) Worker() {
 					// it will not be valid any more.
 
 					delete(s.publisherSpecs, k)
-					log.WithField("name", k).Trace("Deleted publisher")
+					log.WithField("name", k).Trace("PublisherWorker: Deleted publisher")
 				}
 			}
 

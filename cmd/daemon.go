@@ -54,18 +54,18 @@ func DaemonStart(cmd *cli.Cmd) {
 				log.AddHook(hook)
 				log.WithField("hook", hook).Debug("syslog hook")
 			}
+		}
 
-			if logfile != nil && *logfile != "" {
-				f, err := os.OpenFile(*logfile, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0660)
-				if err != nil {
-					log.WithField("err", err).Fatal("unable to set up file logging")
-				}
-				if err := os.Chown(*logfile, -1, *groupID); err != nil {
-					log.WithField("err", err).Warn("unable to chgrp for log file.")
-				}
-				log.WithField("logfile", *logfile).Trace("writing log to file")
-				log.SetOutput(f)
+		if logfile != nil && *logfile != "" {
+			f, err := os.OpenFile(*logfile, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0660)
+			if err != nil {
+				log.WithField("err", err).Fatal("unable to set up file logging")
 			}
+			if err := os.Chown(*logfile, -1, *groupID); err != nil {
+				log.WithField("err", err).Warn("unable to chgrp for log file.")
+			}
+			log.WithField("logfile", *logfile).Trace("writing log to file")
+			log.SetOutput(f)
 		}
 
 		if !*foreground {
