@@ -1,7 +1,9 @@
 package filepublisher
 
 import (
+	"encoding/json"
 	"io/ioutil"
+	"os"
 	"sync"
 
 	"github.com/aschmidt75/ipvsmesh/model"
@@ -14,15 +16,15 @@ type Spec struct {
 	Output OutputSpec `yaml:"output"`
 
 	mu sync.Mutex
-	// etcdclient
 }
 
 // OutputSpec describes where the output file should be writte to,
-// what its format should be (e.g. yaml) and the type of data (delta,data,full)
+// what its format should be (e.g. yaml) and the type of data (deltaonly,dataonly,full)
 type OutputSpec struct {
-	OutputFile   string `yaml:"outputFile"`
-	OutputFormat string `yaml:"outputFormat,omitempty"`
-	OutputType   string `yaml:"outputType,omitempty"`
+	OutputFile     string `yaml:"outputFile"`
+	OutputFormat   string `yaml:"outputFormat,omitempty"`
+	OutputType     string `yaml:"outputType,omitempty"`
+	OutputFileMode *int32 `yaml:"outputFileMode,omitempty"`
 }
 
 func (s *Spec) initialize() error {
@@ -60,19 +62,48 @@ func (s *Spec) HasUpwardInterface() bool {
 	return true
 }
 
-func (s *Spec) PushUpwardData(data model.UpwardData) error {
-	log.WithField("data", data).Debug("PushUpwardData ->")
+func (s *Spec) PushUpwardData(dataT model.UpwardData) error {
+	log.WithField("data", dataT).Debug("PushUpwardData ->")
+
+	// clean
+	data := model.UpwardData{
+		TargetPublisher: dataT.TargetPublisher,
+		Update: model.EndpointUpdate{
+			Delta:          dataT.Update.Delta,
+			Endpoints:      dataT.Update.Endpoints,
+			AdditionalInfo: dataT.Update.AdditionalInfo,
+		},
+	}
+	if s.Output.OutputFormat == "deltaonly" {
+		data.Update.Endpoints = nil
+	}
+	if s.Output.OutputFormat == "dataonly" {
+		data.Update.Delta = nil
+	}
+
+	// default file mode
+	var ofm os.FileMode = 0644
+	if s.Output.OutputFileMode != nil {
+		ofm = os.FileMode(*s.Output.OutputFileMode)
+	}
 
 	// write to file
-
 	if s.Output.OutputType == "yaml" {
 		b, err := yaml.Marshal(data.Update)
 		if err != nil {
 			return err
 		}
 
-		ioutil.WriteFile(s.Output.OutputFile, b, 0644)
+		ioutil.WriteFile(s.Output.OutputFile, b, ofm)
 	}
 
+	if s.Output.OutputType == "json" {
+		b, err := json.Marshal(data.Update)
+		if err != nil {
+			return err
+		}
+
+		ioutil.WriteFile(s.Output.OutputFile, b, ofm)
+	}
 	return nil
 }

@@ -1,24 +1,32 @@
-
 globals:
   ipvsctl:
     executionType: file-only
-    file: ./ipvsctl.yaml
-    
+    file: /tmp/ipvsmesh-ipvsctl.yaml
+
 publishers:
-  - name: sampleFile
+  - name: sampleFile1
     type: filePublisher
+    matchLabels:
+      svc: "sample-1"     
     spec:
-      matchLabels:
-        svc: "sample-1"     # publish only service which match these labels
-      outputFile: /tmp/ipvsmesh-out-sample.yaml
-      outputType: yaml
-      
+      output:
+        outputFile: /tmp/ipvsmesh-publisher-sample-1.yaml
+        outputType: yaml
+  - name: sampleFile2
+    type: filePublisher
+    matchLabels:
+      svc: "sample-nonex"     
+    spec:
+      output:
+        outputFile: /tmp/ipvsmesh-publisher-sample-2.yaml
+        outputType: yaml
+
 services:
   - name: SampleService1
     type: dockerFrontProxy
+    address: 10.1.2.3:80
     labels:
-      svc: "sample-1"   # mark this service with this label
+      svc: "sample-1"  
     spec:
-      address: 10.1.2.3:80
       matchLabels:
-        app: nginx          
+        app: nginx

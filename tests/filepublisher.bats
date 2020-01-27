@@ -47,5 +47,5 @@ teardown() {
 
     refute_output --partial 'fromService=SampleService2'
 
-    [ ! -f ${IPVSMESH_OUT1} ]
+    [ ! -f ${IPVSMESH_OUT2} ]
 }

@@ -26,7 +26,7 @@ services:
     type: dockerFrontProxy
     address: 10.1.2.3:80
     labels:
-      svc: "sample-1"   # mark this service with this label
+      svc: "sample-1"  
     spec:
       matchLabels:
         app: nginx
